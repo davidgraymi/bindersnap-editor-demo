@@ -1,12 +1,6 @@
 import type { Editor } from "@tiptap/core";
 import { useEditorState } from "@tiptap/react";
-import {
-  CaseSensitive,
-  ChevronDown,
-  ChevronRight,
-  ChevronUp,
-  X,
-} from "lucide-react";
+import { AppIcon, ICON } from "../ui-tokens/icons";
 import {
   useEffect,
   useRef,
@@ -144,9 +138,9 @@ export function FindBar({
             onClick={() => setShowReplace((was) => !was)}
           >
             {showReplace ? (
-              <ChevronDown size={14} strokeWidth={2} aria-hidden="true" />
+              <AppIcon icon={ICON.chevronDown} size="sm" heavy />
             ) : (
-              <ChevronRight size={14} strokeWidth={2} aria-hidden="true" />
+              <AppIcon icon={ICON.chevronRight} size="sm" heavy />
             )}
           </button>
         ) : null}
@@ -181,7 +175,7 @@ export function FindBar({
           title="Match case"
           onClick={() => setCaseSensitive((was) => !was)}
         >
-          <CaseSensitive size={16} strokeWidth={1.75} aria-hidden="true" />
+          <AppIcon icon={ICON.matchCase} size="md" />
         </button>
         <button
           type="button"
@@ -191,7 +185,7 @@ export function FindBar({
           disabled={count === 0}
           onClick={() => editor.commands.previousSearchMatch()}
         >
-          <ChevronUp size={16} strokeWidth={1.75} aria-hidden="true" />
+          <AppIcon icon={ICON.chevronUp} size="md" />
         </button>
         <button
           type="button"
@@ -201,7 +195,7 @@ export function FindBar({
           disabled={count === 0}
           onClick={() => editor.commands.nextSearchMatch()}
         >
-          <ChevronDown size={16} strokeWidth={1.75} aria-hidden="true" />
+          <AppIcon icon={ICON.chevronDown} size="md" />
         </button>
         <button
           type="button"
@@ -210,7 +204,7 @@ export function FindBar({
           title="Close (Esc)"
           onClick={close}
         >
-          <X size={16} strokeWidth={1.75} aria-hidden="true" />
+          <AppIcon icon={ICON.close} size="md" />
         </button>
       </div>
 

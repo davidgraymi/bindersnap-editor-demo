@@ -14,4 +14,5 @@ export type GetBinderChangeConflicts200FilesItemAutomatic = typeof GetBinderChan
 export const GetBinderChangeConflicts200FilesItemAutomatic = {
   ours: 'ours',
   theirs: 'theirs',
+  merged: 'merged',
 } as const;

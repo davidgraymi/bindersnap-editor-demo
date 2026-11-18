@@ -7,6 +7,7 @@ import {
   emptyDecision,
   isDecided,
   planFileMerge,
+  resolveRuleClashes,
   toResolution,
 } from "./conflictResolution";
 import { base64ToText, textToBase64 } from "./threeWayMerge";
@@ -30,6 +31,7 @@ function file(
     path: PATH,
     kind: "editor",
     automatic: null,
+    rules: null,
     base: side(doc("Scope", "Clean hands", "Training", "Records")),
     ours: side(doc("Scope", "Clean hands with soap", "Training", "Records")),
     theirs: side(
@@ -144,5 +146,66 @@ describe("files chosen whole", () => {
       key: f.key,
       take: "none",
     });
+  });
+});
+
+describe("the sign-off rules, merged rule by rule", () => {
+  const rulesFile = file({
+    path: ".gitea/CODEOWNERS",
+    kind: "rules",
+    rules: {
+      rules: [
+        { scope: "binder", target: "", teams: ["policy"], users: [] },
+        {
+          scope: "folder",
+          target: "clinical",
+          teams: ["ic", "quality"],
+          users: [],
+        },
+      ],
+      clashes: [
+        {
+          scope: "folder",
+          target: "clinical",
+          ours: { teams: ["quality"], users: [] },
+          theirs: { teams: ["ic"], users: [] },
+        },
+      ],
+    },
+  });
+
+  test("asks one question per clash, in words, not as lines", () => {
+    const merge = planFileMerge(rulesFile);
+    expect(merge.mode).toBe("rules");
+    expect(isDecided(merge, emptyDecision(merge))).toBe(false);
+  });
+
+  test("sends the file with each clash settled as chosen", () => {
+    const merge = planFileMerge(rulesFile);
+    const resolution = toResolution(
+      rulesFile,
+      merge,
+      { whole: null, pieces: ["ours"] },
+      "riverside",
+    );
+    expect(resolution?.take).toBe("content");
+    const text = base64ToText(
+      (resolution as { base64Content: string }).base64Content,
+    );
+    expect(text).toContain(".*  @riverside/policy");
+    expect(text).toContain("clinical/.*  @riverside/quality");
+    expect(text).not.toContain("@riverside/ic");
+  });
+
+  test("keeping both unions the owners", () => {
+    const merge = planFileMerge(rulesFile) as Extract<
+      ReturnType<typeof planFileMerge>,
+      { mode: "rules" }
+    >;
+    const rules = resolveRuleClashes(merge, ["both"]);
+    expect(rules?.find((rule) => rule.scope === "folder")?.teams).toEqual([
+      "quality",
+      "ic",
+    ]);
   });
 });

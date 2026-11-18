@@ -4,6 +4,26 @@ Read with the root `AGENTS.md`. This file is the detail behind three of the
 app's screens — the editor, the change comparison and the conflict resolver —
 which the root guide only summarizes.
 
+## Tab titles and help
+
+**Every page names itself in the browser tab** (`pageTitle.ts`): the thing
+first, the place second, "Expenses Policy · Corporate · Bindersnap".
+`routeTitleParts` gives every `AppRoute` a title from its address alone, so a
+new route kind does not compile until it has one. A page that has read
+something better calls `usePageTitle` (a change request says its own title;
+the editor adds its unsaved mark). Never set `document.title` directly.
+
+**Help opens on the guide about the page on screen.** The guides are data
+(`helpGuides.ts`), served as pages on the public site (`apps/help`).
+`guideForRoute` in `helpLinks.ts` maps a route to its guide, and the
+sidebar's and the profile menu's Help use it; a page with no guide of its own
+opens the list. A new screen that raises its own questions gets a guide, or a
+section of one, and an entry there. `HelpLink` links to one guide or one
+section, by its heading: a heading's anchor is `helpSectionId(heading)`, and
+`helpLinks.test.ts` lists every section the app links to, so rewording a
+heading fails a test instead of breaking a link. A guide says only what the
+app does: when a screen changes, its guide changes in the same PR.
+
 ## The document editor
 
 `packages/editor/` is a word processor for policies, imported by the SPA and
@@ -21,12 +41,13 @@ writes — `*.json` — is opened in it. **A Word file or a PDF chosen in the
 editor is shown there, read only** (`EditorFileCover`, the editor's `cover`):
 the document page's own preview on the desk where the page goes, the ribbon
 locked, the file panel and status bar where they were, and a note at the top
-right — "Word document · View only", Edit in Bindersnap, Download — so moving
+right — "Word document · View only", Edit in Bindersnap, Upload new version
+(into the draft), Download — so moving
 to one never leaves the editor. Moving between documents replaces the address
 rather than adding to Back. A Word file or a PDF is edited in the
 program that made it and uploaded as a new version, **or converted on request**:
-"Edit in Bindersnap" (the document's page, the editor's file panel, and the
-note on a file shown in the editor) opens
+"Edit in Bindersnap" (the editor's file panel, and the note on a file shown
+in the editor) opens
 `ConvertDocumentModal`, which reads the file in the browser
 (`convertToEditor.ts`: mammoth for `.docx`, pdf.js for a PDF, then the
 editor's own schema) and says what the conversion loses _before_ anything is
@@ -60,17 +81,30 @@ counts the others, and Save all commits them, one act each. Only leaving
 the editor — Close, Propose, another draft — asks, and offers Save all. **The editor owns the draft**: "Saving to" is the `BinderDraftPicker`
 (switch or start a draft on the same policy) and Propose opens the propose
 step for that draft, returning to the policy on Back. Close lands on the
-document at `?edit=1&draft=`, with the draft bar (Propose, Discard) at the foot
-as on the binder's own page. It says "In <draft>" and lists your drafts
+document read at the draft, `/-/blob/{draft}/{path}` (a folder on the desk
+closes to `/-/tree/{draft}/{folder}`), with the draft bar (Propose, Discard)
+at the foot. It says "In <draft>" and lists your drafts
 in the file panel's "What you are reading". The binder's own page offers the
-same picker while reading, with "On the record" as a place. **Edit on a
-binder opens the editor** (`pickPolicyToWrite`: the policy last written in the
-draft, else the first) — only a binder with nothing the editor writes opens
-the tree. **The editor's file panel organizes the draft in place**: each row
+same picker while reading, with "On the record" as a place. **One button,
+Edit** (D8 of `docs/design/sign-off-rules-in-place.md`): the binder, folder
+and document pages offer nothing else, to anyone who can write. Edit on a
+document opens it in the editor; on a folder's page it puts the folder on the
+desk; on a binder it opens `pickPolicyToWrite`'s policy (the last written in
+the draft, else the first), or the binder's top folder when there is none.
+**A folder on the desk** (`EditorFolderDesk`, in the `cover` slot, at
+`/-/tree/{ref}/{folder}?edit=write`) is a head card — Upload files here, New
+document here — over the binder page's own list, read at the draft, with no
+Published picker. A folder's name in the file panel opens it there; its
+arrow opens and shuts it in place. **"Who signs off here"** is the editor's
+right-hand panel (`EditorSignOffSide`, in the `aside` slot beside the file
+panel): the rules for the folder or document open, read at the draft; Set
+here is edited there (`PUT …/rules/sign-off`, one act per edit), From above
+is read only. **The editor's file panel organizes the draft in place**: each row
 renames (pencil, double-click on the open one, or F2), moves (drag onto a
 folder, or Move), and a policy archives; New folder is in its head. A
 right-click, the menu key or Shift+F10 on a row opens the same acts as a
-menu, and a folder's adds "New document here" and "New folder here". Every act
+menu, and a folder's adds "New document here", "Upload files here" and "New
+folder here"; Upload is also in the panel's head. Every act
 goes into the same draft. When one moves the open policy — renaming it,
 refiling it, or renaming a folder above it — its unsaved words are saved first
 and the editor follows it by identity (`uid`) to its new address; archived, it
@@ -78,12 +112,36 @@ goes on to the next policy to write (`actInEditor` in `BinderShell.tsx`).
 The title in the editor's header is the open policy's name and renames it
 the same way.
 Archiving from the panel offers Undo, and the panel's foot lists the archive
-with Restore, both into the same draft. Organize on the binder's header is the
-same tree on the binder's own page. **An open change request is edited in
-place by its author**: Edit on its Proposed version card opens the editor at
+with Restore, both into the same draft. **There are two places, reading and the editor, and no third.** The
+binder's tree had an edit mode of its own at `?edit=1` (Done and Edit, rename
+and drag in place). It is retired: the editor's file panel organizes, and a
+draft's home is the binder read at the draft, where `BinderDraftBar`
+proposes or discards it (`homeDraftBranch` in `BinderShell.tsx`). An old
+`?edit=1` address is rewritten to that page. Do not add a mode between
+reading and the editor. **Reading a draft is reading a
+branch**: the binder's version picker opens one of your drafts at
+`/-/tree/{draft}`, the same page as the record's, under the draft's name,
+with "Who signs off here" read there (`?ref=` on `GET …/rules/sign-off`).
+The explorer's links, a document's path and a folder's contents stay on the
+branch or draft being read. **Edit is on every version's binder, folder
+and document page** (`branchEdit.ts`): on the record it opens your draft;
+on one of your drafts, proposed or not, it carries on in it; on a change you
+write it opens the editor at `?change=N` (from the binder or a folder, on a
+policy the change touches there); on anybody else's branch it reads "Edit in
+your draft" and opens yours at the same place. **One branch, one name**: the
+picker lists a proposed draft once, under Change requests as "Your draft",
+and its button, the card over the tree and the draft bar all call it by its
+change's title. **An open change request is edited in
+place by its author and its co-editors** (the pull request's assignees,
+named on the change; the server refuses anyone else's save): Edit on its Proposed version card opens the editor at
 `?edit=write&change=N`, which reads the change's branch and saves with
 `changeNumber` (the server's `resolveChangeToJoin`) — no draft, no Propose,
 and Close returns to the change.
+**Edit on a document already in an open change asks first**
+(`EditChoiceDialog`, `editChoices.ts`): one row per change, with "Continue
+in it" for its author and co-editors (into the editor at `?change=N`, or the
+change itself for a Word file or a PDF) and "Comment on it" for everybody
+else (its Changes tab), and always "Start a separate change".
 **A proposed draft is still its owner's draft**, like a branch with a pull
 request open on it: `listBinderDrafts({ proposed: true })` keeps it, with its
 `changeNumber`, in the owner's picker and in `?draft=` reads; a save into it
@@ -101,6 +159,15 @@ address. Limit 1.5 MB per picture after scaling. A picture's size is its
 `width` attribute alone, in pixels at 100% zoom (`extensions/PictureSize.ts`,
 the corner handles, and the Picture tab's presets); a height is never stored,
 so it cannot be saved squashed.
+
+**A save names the version it was written on** (`basedOn`, the file's git
+blob SHA: as the editor read it, then as each of its own saves left it, per
+policy). Into a draft or a change the server refuses a save whose file has
+moved on since (409, `code: "stale"`): two co-editors writing one file
+otherwise replaced each other's words without either knowing. Saves go one at
+a time (`saveQueue` in `DocumentEditorPage.tsx`), so the editor's own save in
+flight is never mistaken for somebody else's. There is no live sync: the
+editor reads a document once, when it is opened.
 
 **AutoRecover** (`apps/app/editorRecovery.ts`): unsaved words are kept in this
 browser's `localStorage`, per org/binder/draft/policy, 800ms after the last
@@ -213,6 +280,16 @@ actually keeps a policy manual in.
 
 Added text is green and removed text is coral, and both carry an underline or
 a strike as well as a colour, so the comparison still reads without one.
+
+**A reviewer comments on the words** (`components/PassageComments.tsx`,
+`textAnchor.ts`): select text in a document here, choose Comment, and the
+thread remembers the passage. `PassageComments` wraps whatever draws the
+document and works on the text of the `.doc-preview-prose` inside it, so the
+three renderers know nothing about it. The passages are painted with the CSS
+Custom Highlight API rather than wrapped in elements: the page is markup
+somebody approved, and it is not edited to show a comment. An anchor is the
+words and their neighbours, not an offset, so it survives the document
+changing above it and says so when the words themselves have gone.
 
 ## Resolving a change's conflicts
 

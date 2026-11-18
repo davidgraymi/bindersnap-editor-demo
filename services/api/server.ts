@@ -189,6 +189,7 @@ import {
   listDocumentVersions,
   documentVersionsFrom,
   listRemovedDocuments,
+  listChangedPaths,
   listTouchedDocuments,
   readArchivedDocument,
   readRemovedDraftDocument,
@@ -212,6 +213,7 @@ import {
   findCurrentDraft,
   startDraft,
   isDraftBranch,
+  normalizeReadableRef,
   listBinderDrafts,
   openDraft,
   readDraftActs,
@@ -224,6 +226,7 @@ import {
   planDocumentRestore,
   planFolderRename,
   planNewFolder,
+  normalizeFolder,
   type ShapeChangeResult,
 } from "./binderShape";
 import {
@@ -286,6 +289,7 @@ import {
   replyToDiscussion,
   setCommentReactionInThread,
   setDiscussionResolution,
+  readAnchor,
 } from "./gitea-client/discussions";
 import { isSupportedReaction } from "./gitea-client/reactions";
 import { buildAuditPacket } from "./export/auditPacket";
@@ -320,6 +324,8 @@ import {
 import type { ClosedChange } from "../../packages/api-schema/schemas/documents";
 import type {
   BinderPeoplePayload,
+  BinderSignOffPayload,
+  OrganizationGroupPagePayload,
   DocumentSearchHit,
   OrganizationMembersPayload,
   OrganizationPeoplePayload,
@@ -343,10 +349,23 @@ import {
 import { proposeSignOffRules, readSignOffRules } from "./gitea-client/signOff";
 import { requiredReviewersFor } from "./requiredReviewers";
 import {
+  CODEOWNERS_PATH,
+  dropFolderRules,
+  mergeSignOffRules,
+  moveFolderRules,
+  parseCodeowners,
+  renderCodeowners,
+  type SignOffMerge,
   validateSignOffRules,
+  withSignOffRule,
   type SignOffRule,
   type SignOffScope,
 } from "../../packages/utils/codeowners";
+import {
+  buildSignOffChange,
+  placesGroupSignsOff,
+  signOffReach,
+} from "./sign-off-view";
 import {
   buildUploadBranchName,
   buildUploadCommitMessage,
@@ -364,6 +383,7 @@ import {
   attachReviews,
   readMergeCommitSha,
   listBranchUpdates,
+  listChangeWriters,
   listPullRequests,
   findClosedChanges,
   listPullRequestsWithReviews,
@@ -398,7 +418,10 @@ import {
   signatureOf,
   countApprovals,
   planReviewerChanges,
+  mayEditChange,
+  NOT_AN_EDITOR,
   readAssignee,
+  readCoEditors,
   readRequestedReviewers,
   toChangeUser,
 } from "./change-assignments";
@@ -406,8 +429,15 @@ import { buildChangeUpdates } from "./change-updates";
 import {
   applySecurityHeaders,
   clientIpFrom,
+  resourceRequestLimiter,
   stripeWebhookLimiter,
 } from "./edge";
+import {
+  handleResourceRequest,
+  handleResourceUnsubscribe,
+  reportResourceRequests,
+  resourceRequestStore,
+} from "./resource-requests";
 import type { DraftNameRecord } from "./draft-names";
 import { defaultMyDraftsDeps, readMyDrafts } from "./my-drafts";
 import {
@@ -4088,6 +4118,9 @@ function buildPendingChangeRow(
     ...entry.pullRequest,
     reviewers,
     assignee: readAssignee(entry.pullRequest),
+    // Who besides its author may write it: a document's Edit asks whether to
+    // carry on in it or start apart, and only these people may carry on.
+    coEditors: readCoEditors(entry.pullRequest),
     approvalCount,
     requiredApprovals,
     isRejected,
@@ -5398,10 +5431,30 @@ async function handleUpdateChangeAssignments(
     );
   }
 
-  if (!assigneeGiven && !reviewersGiven) {
+  // Everybody besides the author who may edit the change, as a whole list.
+  const coEditorsGiven = payload !== null && "coEditors" in payload;
+  const coEditors = coEditorsGiven
+    ? readUsernameList(payload?.coEditors)
+    : null;
+  if (coEditorsGiven && coEditors === null) {
     return json(
       400,
-      { error: "Provide an assignee, a reviewer list, or both." },
+      { error: "coEditors must be an array of usernames." },
+      baseHeaders,
+    );
+  }
+  if (assigneeGiven && coEditorsGiven) {
+    return json(
+      400,
+      { error: "Send coEditors or assignee, not both: they are one list." },
+      baseHeaders,
+    );
+  }
+
+  if (!assigneeGiven && !reviewersGiven && !coEditorsGiven) {
+    return json(
+      400,
+      { error: "Provide co-editors, a reviewer list, or both." },
       baseHeaders,
     );
   }
@@ -5424,13 +5477,53 @@ async function handleUpdateChangeAssignments(
     });
     const submittedBy = before.pullRequest.user?.login ?? "";
 
-    if (assigneeGiven) {
+    if (assigneeGiven || coEditorsGiven) {
+      // **Naming a co-editor lets them change what the change proposes**, so
+      // it is its author's to do, or a binder admin's when the author cannot.
+      // It was open to anybody who could write in the binder.
+      const isAuthor =
+        submittedBy.toLowerCase() === auth.session.username.toLowerCase();
+      const access = isAuthor
+        ? null
+        : await readWorkspaceAccess({ client, org: owner, name: repo });
+      if (!isAuthor && !access?.admin) {
+        return json(
+          403,
+          {
+            error:
+              "Only the author or a binder admin can say who else edits this change.",
+          },
+          baseHeaders,
+        );
+      }
+      // Somebody whose approval is on the change cannot become one of its
+      // writers: the approval would be of their own work.
+      const naming = coEditors ?? (assignee ? [assignee] : []);
+      const approved = naming.find((login) =>
+        before.reviews.some(
+          (review) =>
+            (review.user?.login ?? "").toLowerCase() === login.toLowerCase() &&
+            (review.state ?? "").toUpperCase() === "APPROVED" &&
+            !review.dismissed,
+        ),
+      );
+      if (approved) {
+        return json(
+          409,
+          {
+            error: `${approved} has approved this change, and somebody who approved it cannot also edit it.`,
+          },
+          baseHeaders,
+        );
+      }
       await setPullRequestAssignees({
         client,
         owner,
         repo,
         pullNumber: prNumber,
-        assignees: assignee ? [assignee] : [],
+        assignees: naming.filter(
+          (login) => login.toLowerCase() !== submittedBy.toLowerCase(),
+        ),
       });
     }
 
@@ -5645,6 +5738,13 @@ async function handleCreateDiscussionThread(
       repo,
       pullNumber: prNumber,
       body,
+      // The passage it is about, when it is about one. Read as untrusted:
+      // anything that is not a bounded anchor is left off.
+      anchor: readAnchor(
+        payload && typeof payload === "object"
+          ? (payload as Record<string, unknown>).anchor
+          : null,
+      ),
       viewerLogin: auth.session.username,
       withReactions: true,
     });
@@ -7258,11 +7358,14 @@ async function readApprovalRules(params: {
   org: string;
   workspace: string;
   author: string;
+  coEditors: readonly string[];
   reviews: Parameters<typeof buildApprovalRules>[0]["reviews"];
   signOff: SignOffRule[];
   ignoresStale: boolean;
+  paths: readonly string[];
 }): Promise<ApprovalRuleView[]> {
-  const { org, workspace, author, reviews, signOff, ignoresStale } = params;
+  const { org, workspace, author, reviews, signOff, ignoresStale, paths } =
+    params;
   const client = createPrivilegedGiteaClient();
   const protection = await readWorkspaceProtection(org, workspace);
 
@@ -7298,6 +7401,7 @@ async function readApprovalRules(params: {
 
   return buildApprovalRules({
     author,
+    coEditors: params.coEditors,
     requiredApprovals: protection?.requiredApprovals ?? null,
     approvers: protection
       ? {
@@ -7308,6 +7412,7 @@ async function readApprovalRules(params: {
     signOff,
     reviews,
     ignoresStale,
+    paths,
     members: (group) => members.get(group) ?? [],
     person: (login) =>
       toChangeUser(
@@ -7382,6 +7487,7 @@ async function handleWorkspaceChangeDetail(
       gate,
       tags,
       mainTree,
+      changedPaths,
     ] = await Promise.all([
       getPullRequestWithReviews({
         client,
@@ -7432,6 +7538,14 @@ async function handleWorkspaceChangeDetail(
         org: orgName,
         workspace: workspaceName,
       }).catch(() => null),
+      // Every path, the rules file included: no document list carries it,
+      // and it decides whether the rules rule applies here.
+      listChangedPaths({
+        client,
+        org: orgName,
+        workspace: workspaceName,
+        pullNumber,
+      }).catch(() => [] as string[]),
     ]);
 
     const pullState = entry.pullRequest as {
@@ -7515,6 +7629,56 @@ async function handleWorkspaceChangeDetail(
     // "Bob's draft", worked out from the branch's shape, when Bob had called
     // it "Retire the 2019 supplier terms" — the one sentence about the work
     // that was his, in the one place it was not shown.
+    // **What it does to who signs off**, against where it started. Read only
+    // when it touches the rules file. The head's tree names the documents
+    // each rule will cover; a read that fails costs the section, not the page.
+    const editsRules = changedPaths.includes(CODEOWNERS_PATH);
+    const signOffChange = editsRules
+      ? await (async () => {
+          const pull = entry.pullRequest as {
+            merge_base?: string;
+            head?: { sha?: string } | null;
+          };
+          const startedAt = pull.merge_base || baseRef;
+          const headAt = pull.head?.sha || "";
+          if (headAt === "") return null;
+          const [before, after, headTree] = await Promise.all([
+            readSignOffRules({
+              client,
+              org: orgName,
+              workspace: workspaceName,
+              ref: startedAt,
+            }),
+            readSignOffRules({
+              client,
+              org: orgName,
+              workspace: workspaceName,
+              ref: headAt,
+            }),
+            readWorkspaceTree({
+              client,
+              org: orgName,
+              workspace: workspaceName,
+              ref: headAt,
+            }).catch(() => null),
+          ]);
+          return buildSignOffChange({
+            paths: changedPaths,
+            before: before.rules,
+            after: after.rules,
+            documents: (headTree?.documents ?? []).map((document) => ({
+              path: document.path,
+              uid: document.uid,
+              name: document.name,
+            })),
+          });
+        })().catch(() => null)
+      : null;
+    const gatedPaths = [
+      ...documents.map((document) => document.path),
+      ...(editsRules ? [CODEOWNERS_PATH] : []),
+    ];
+
     const changeRow = buildPendingChangeRow(entry, mergeRules);
     const branchLabel = isDraftBranch(changeRow.branchName)
       ? ((
@@ -7541,6 +7705,7 @@ async function handleWorkspaceChangeDetail(
           : null,
         decidedBy: decided?.decidedBy ?? null,
         branchLabel,
+        coEditors: readCoEditors(entry.pullRequest),
         documents: withVersions,
         removedDocuments,
         // `main` has moved on if the change's merge base is no longer the base
@@ -7564,11 +7729,28 @@ async function handleWorkspaceChangeDetail(
             binder: workspaceName,
             username: auth.session.username,
             canWrite: access.push,
-          })),
+          }).then((rights) => ({
+            ...rights,
+            // Somebody who wrote part of it does not sign it off.
+            canApprove:
+              rights.canApprove &&
+              !mayEditChange(entry.pullRequest, auth.session.username),
+          }))),
           // Its author or a binder admin, as `handleSetWorkspaceChangeOpen`
           // decides it. Never on a published change: that is the record.
           canCloseOrReopen:
             decided?.outcome !== "published" &&
+            (access.admin ||
+              (entry.pullRequest.user?.login ?? "").toLowerCase() ===
+                auth.session.username.toLowerCase()),
+          // Its author and its co-editors change what it proposes; nobody
+          // else, whatever their access to the binder.
+          canEdit:
+            !decided &&
+            access.push &&
+            mayEditChange(entry.pullRequest, auth.session.username),
+          canNameCoEditors:
+            !decided &&
             (access.admin ||
               (entry.pullRequest.user?.login ?? "").toLowerCase() ===
                 auth.session.username.toLowerCase()),
@@ -7577,7 +7759,7 @@ async function handleWorkspaceChangeDetail(
         // named. Read rather than guessed: see `requiredReviewers.ts`.
         requiredReviewers: requiredReviewersFor({
           rules: signOff.rules,
-          paths: documents.map((document) => document.path),
+          paths: gatedPaths,
           gate,
         }),
         // What has to be true before it can be published, rule by rule, and
@@ -7587,15 +7769,17 @@ async function handleWorkspaceChangeDetail(
           org: orgName,
           workspace: workspaceName,
           author: entry.pullRequest.user?.login ?? "",
+          coEditors: readCoEditors(entry.pullRequest).map(
+            (editor) => editor.login,
+          ),
           reviews: entry.reviews,
           signOff: gate?.codeownersBlock
-            ? matchingSignOffRules(
-                signOff.rules,
-                documents.map((document) => document.path),
-              )
+            ? matchingSignOffRules(signOff.rules, gatedPaths)
             : [],
           ignoresStale: mergeRules?.ignoresStale ?? true,
+          paths: gatedPaths,
         }),
+        signOffChange,
       },
       baseHeaders,
     );
@@ -7898,12 +8082,43 @@ async function handleWorkspaceChangeUpdate(
     );
     if (decided) return decided;
 
-    const caughtUp = await updateChangeBranch({
+    // **What settles itself, settles here.** A file both sides changed but
+    // that has an answer without asking — a move against an edit, or two
+    // drafts' sign-off rules that merge rule by rule — would otherwise send
+    // the author to the resolver with nothing to decide. Anything that needs
+    // a person falls through to the merge, which refuses as it always has.
+    const heads = await readChangeHeads({
       client,
-      owner: orgName,
-      repo: workspaceName,
+      org: orgName,
+      workspace: workspaceName,
       pullNumber,
     });
+    const conflicts = await readChangeConflicts({
+      client,
+      org: orgName,
+      workspace: workspaceName,
+      heads,
+    }).catch(() => [] as ConflictingFile[]);
+    const caughtUp =
+      conflicts.length > 0 && conflicts.every((c) => c.automatic !== null)
+        ? (
+            await resolveChangeConflicts({
+              client,
+              org: orgName,
+              workspace: workspaceName,
+              pullNumber,
+              branch: heads.branch,
+              conflicts,
+              resolutions: [],
+              username: auth.session.username,
+            })
+          ).caughtUp
+        : await updateChangeBranch({
+            client,
+            owner: orgName,
+            repo: workspaceName,
+            pullNumber,
+          });
 
     logger.info("Binder change brought up to date", {
       username: auth.session.username,
@@ -8009,7 +8224,66 @@ async function readChangeConflicts(params: {
       readTreeBlobs({ client, org, workspace, sha }),
     ),
   );
-  return findConflictingFiles(base!, ours!, theirs!);
+  const conflicts = findConflictingFiles(base!, ours!, theirs!);
+
+  // **The sign-off rules merge rule by rule, never as text.** The file is
+  // written in one canonical form (one line per target), so two drafts that
+  // each changed who signs off somewhere merge cleanly unless they changed the
+  // same target both ways — and only then does a person decide.
+  return Promise.all(
+    conflicts.map(async (conflict) => {
+      if (conflict.path !== CODEOWNERS_PATH || conflict.automatic !== null) {
+        return conflict;
+      }
+      const merge = await mergeRulesConflict({
+        client,
+        org,
+        workspace,
+        conflict,
+      });
+      if (!merge || merge.clashes.length > 0) return conflict;
+      return {
+        ...conflict,
+        automatic: "merged" as const,
+        mergedContent: Buffer.from(
+          renderCodeowners(org, merge.rules),
+          "utf8",
+        ).toString("base64"),
+      };
+    }),
+  );
+}
+
+/** Read the rules file at the three points and merge it, or null if one side cannot be read. */
+async function mergeRulesConflict(params: {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  conflict: ConflictingFile;
+}): Promise<SignOffMerge | null> {
+  const { client, org, workspace, conflict } = params;
+  const read = async (side: { sha: string } | null) => {
+    if (!side) return { rules: [] as SignOffRule[], unreadable: [] };
+    const blob = await readBlob({ client, org, workspace, sha: side.sha });
+    return parseCodeowners(
+      org,
+      Buffer.from(blob.base64, "base64").toString("utf8"),
+    );
+  };
+  try {
+    const [base, ours, theirs] = await Promise.all([
+      read(conflict.base),
+      read(conflict.ours),
+      read(conflict.theirs),
+    ]);
+    // A line nobody can read would be lost in the merge: leave it to a person.
+    if ([base, ours, theirs].some((side) => side.unreadable.length > 0)) {
+      return null;
+    }
+    return mergeSignOffRules(base.rules, ours.rules, theirs.rules);
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -8044,7 +8318,7 @@ async function handleWorkspaceChangeConflicts(
       return json(404, { error: "No such binder." }, baseHeaders);
     }
 
-    const [heads, access] = await Promise.all([
+    const [heads, access, pull] = await Promise.all([
       readChangeHeads({
         client,
         org: orgName,
@@ -8052,6 +8326,12 @@ async function handleWorkspaceChangeConflicts(
         pullNumber,
       }),
       readWorkspaceAccess({ client, org: orgName, name: workspaceName }),
+      getPullRequestWithReviews({
+        client,
+        owner: orgName,
+        repo: workspaceName,
+        pullNumber,
+      }),
     ]);
     const conflicts = heads.open
       ? await readChangeConflicts({
@@ -8083,8 +8363,22 @@ async function handleWorkspaceChangeConflicts(
       conflicts.map(async (conflict) => ({
         key: conflict.key,
         path: conflict.path,
-        kind: conflictFileKind(conflict.path),
+        kind:
+          conflict.path === CODEOWNERS_PATH
+            ? ("rules" as const)
+            : conflictFileKind(conflict.path),
         automatic: conflict.automatic,
+        // For the rules file: the merge, with only the clashes left to
+        // decide, said as rules rather than as lines of the file.
+        rules:
+          conflict.path === CODEOWNERS_PATH
+            ? await mergeRulesConflict({
+                client,
+                org: orgName,
+                workspace: workspaceName,
+                conflict,
+              })
+            : null,
         base: await side(conflict.base),
         ours: await side(conflict.ours),
         theirs: await side(conflict.theirs),
@@ -8101,7 +8395,10 @@ async function handleWorkspaceChangeConflicts(
         upToDate: !heads.mergeBase || heads.mergeBase === heads.baseSha,
         headSha: heads.headSha,
         baseSha: heads.baseSha,
-        canResolve: access.push,
+        // Choosing between two wordings is changing what it proposes: its
+        // author's, or a co-editor's.
+        canResolve:
+          access.push && mayEditChange(pull.pullRequest, auth.session.username),
         files,
       },
       baseHeaders,
@@ -8171,18 +8468,29 @@ async function handleResolveWorkspaceChangeConflicts(
       return json(404, { error: "No such binder." }, baseHeaders);
     }
 
-    const heads = await readChangeHeads({
-      client,
-      org: orgName,
-      workspace: workspaceName,
-      pullNumber,
-    });
+    const [heads, pull] = await Promise.all([
+      readChangeHeads({
+        client,
+        org: orgName,
+        workspace: workspaceName,
+        pullNumber,
+      }),
+      getPullRequestWithReviews({
+        client,
+        owner: orgName,
+        repo: workspaceName,
+        pullNumber,
+      }),
+    ]);
     if (!heads.open) {
       return json(
         409,
         { error: "This change is no longer open." },
         baseHeaders,
       );
+    }
+    if (!mayEditChange(pull.pullRequest, session.username)) {
+      return json(403, { error: NOT_AN_EDITOR }, baseHeaders);
     }
     if (heads.headSha !== body.headSha || heads.baseSha !== body.baseSha) {
       return json(
@@ -8356,6 +8664,47 @@ async function handleWorkspaceChangeReview(
           { error: "Only this binder's approvers can approve." },
           baseHeaders,
         );
+      }
+      // **Nobody signs off what they wrote.** Gitea refuses the author; a
+      // co-editor wrote part of it too, and Gitea would count theirs.
+      const reviewed = await getPullRequestWithReviews({
+        client,
+        owner: orgName,
+        repo: workspaceName,
+        pullNumber,
+      });
+      if (mayEditChange(reviewed.pullRequest, auth.session.username)) {
+        return json(
+          403,
+          {
+            error:
+              "You can edit this change, so you cannot approve it or ask for changes on it. Somebody who did not write it has to.",
+          },
+          baseHeaders,
+        );
+      }
+      // Taken off the co-editors after writing into it is still having
+      // written it: whoever made a commit on the branch does not sign off.
+      const head = reviewed.pullRequest.head?.ref ?? "";
+      const base = reviewed.pullRequest.base?.ref ?? "";
+      if (head && base) {
+        const writers = await listChangeWriters({
+          client,
+          owner: orgName,
+          repo: workspaceName,
+          branch: head,
+          base,
+        });
+        if (writers.has(auth.session.username)) {
+          return json(
+            403,
+            {
+              error:
+                "You wrote part of this change, so you cannot approve it or ask for changes on it. Somebody who did not write it has to.",
+            },
+            baseHeaders,
+          );
+        }
       }
     }
 
@@ -8543,6 +8892,7 @@ async function handleListWorkspaceChanges(
       orgName,
       workspaceName,
       state,
+      auth.session.username,
     );
 
     return json(
@@ -8589,7 +8939,13 @@ async function handleListOrganizationChanges(
     });
     const perBinder = await Promise.all(
       workspaces.map((workspace) =>
-        listWorkspaceChangeSummaries(client, orgName, workspace.name, state)
+        listWorkspaceChangeSummaries(
+          client,
+          orgName,
+          workspace.name,
+          state,
+          auth.session.username,
+        )
           .then((changes) =>
             changes.map((change) => ({ ...change, binder: workspace.name })),
           )
@@ -8622,6 +8978,8 @@ async function listWorkspaceChangeSummaries(
   orgName: string,
   workspaceName: string,
   state: "open" | "closed",
+  /** Who is reading, to say which changes they may edit. */
+  username: string,
 ) {
   const [entries, mergeRules, versionsByDocument] = await Promise.all([
     listPullRequestsWithReviews({
@@ -8720,6 +9078,8 @@ async function listWorkspaceChangeSummaries(
         reviews: toVersionReviews(reviews),
         reviewers: row.reviewers,
         assignee: row.assignee,
+        coEditors: readCoEditors(pullRequest),
+        viewerCanEdit: isOpen && mayEditChange(pullRequest, username),
         documents: describeChangeDocuments({
           branchName: row.branchName,
           mergeCommitSha,
@@ -9988,6 +10348,473 @@ async function handleBinderSignOffRules(
       baseHeaders,
       "Unable to propose the sign-off rules.",
     );
+  }
+}
+
+/**
+ * Who signs off in a binder, for the sign-off panel.
+ *
+ * Read at `main` on the binder, folder and document pages, and at the
+ * caller's own draft (or a change) in the editor, because that is where the
+ * rules they are editing are. Groups come with their people and with whether
+ * they can read the binder, so a rule naming a group that cannot is said out
+ * loud: such a rule can never be met. The groups are read with the service
+ * account, as the change page reads them — who has to approve is something
+ * every reader of the binder may see.
+ *
+ * A read, so never gated.
+ */
+async function handleBinderSignOffView(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+  workspaceName: string,
+  draftRaw: string | null,
+  changeRaw: string | null,
+  refRaw: string | null = null,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  const { client, session } = auth;
+
+  try {
+    const workspace = await findWorkspaceRepo({
+      client,
+      org: orgName,
+      name: workspaceName,
+    });
+    if (!workspace) {
+      return json(404, { error: "No such binder." }, baseHeaders);
+    }
+
+    const draft = await resolveOwnDraftBranch({
+      client,
+      org: orgName,
+      workspace: workspaceName,
+      username: session.username,
+      draftRaw,
+    });
+    if (draft && "error" in draft) {
+      return json(409, { error: draft.error }, baseHeaders);
+    }
+    // **A branch's rules, the way its tree is read** (`/-/tree/{ref}`): a
+    // draft read as a branch shows the rules in it, not the record's. The
+    // same rule as the documents list: somebody else's unproposed draft is
+    // refused.
+    const readable = draft
+      ? null
+      : await resolveReadableRef({
+          client,
+          org: orgName,
+          workspace: workspaceName,
+          username: session.username,
+          refRaw,
+        });
+    if (readable && "error" in readable) {
+      return json(409, { error: readable.error }, baseHeaders);
+    }
+    const changeNumber = Number.parseInt(changeRaw ?? "", 10);
+    const onChange =
+      !draft && !readable && Number.isFinite(changeNumber) && changeNumber > 0
+        ? await getPullRequestHeadBranch({
+            client,
+            owner: orgName,
+            repo: workspaceName,
+            pullNumber: changeNumber,
+          })
+            .then((branch) => branch || null)
+            .catch(() => null)
+        : null;
+    const ref = draft ? draft.branch : (readable?.ref ?? onChange ?? "main");
+
+    const privileged = createPrivilegedGiteaClient() ?? client;
+    const [signOff, protection, tree, orgTeams, repoTeams, owners] =
+      await Promise.all([
+        readSignOffRules({
+          client,
+          org: orgName,
+          workspace: workspaceName,
+          ref,
+        }),
+        readWorkspaceProtection(orgName, workspaceName),
+        readWorkspaceTree({
+          client,
+          org: orgName,
+          workspace: workspaceName,
+          ref,
+        }).catch(() => ({ documents: [], folders: [], paths: [] })),
+        listOrganizationTeams({ client: privileged, org: orgName }).catch(
+          () => [],
+        ),
+        listRepoTeams({
+          client: privileged,
+          owner: orgName,
+          repo: workspaceName,
+        }).catch(() => null),
+        listOrganizationOwners({ client: privileged, org: orgName }).catch(
+          () => [],
+        ),
+      ]);
+
+    const named = new Set<string>([
+      ...signOff.rules.flatMap((rule) => rule.teams),
+      ...(protection?.approvalsWhitelistTeams ?? []),
+    ]);
+    const namedPeople = new Set<string>([
+      ...signOff.rules.flatMap((rule) => rule.users),
+      ...(protection?.approvalsWhitelistUsernames ?? []),
+    ]);
+
+    // Members of the groups named and of the groups granted, read once each.
+    const wantedTeams = orgTeams.filter(
+      (team) =>
+        named.has(team.name) ||
+        (repoTeams ?? []).some((granted) => granted.name === team.name),
+    );
+    const membersByTeam = new Map(
+      await Promise.all(
+        wantedTeams.map(
+          async (team) =>
+            [
+              team.name,
+              await listTeamMembers({
+                client: privileged,
+                teamId: team.id,
+              }).catch(() => []),
+            ] as const,
+        ),
+      ),
+    );
+
+    const reach =
+      repoTeams === null
+        ? // Could not read who is granted: mark nobody, rather than everybody.
+          { group: () => true, person: () => true }
+        : signOffReach({
+            grantedGroups: repoTeams.map((team) => ({
+              name: team.name,
+              members: (membersByTeam.get(team.name) ?? []).map((m) => m.login),
+            })),
+            owners: owners.map((owner) => owner.login),
+            openToOrganization: repoTeams.some((team) =>
+              isEveryoneTeam(team.name),
+            ),
+          });
+
+    const fullNames = new Map<string, string>();
+    for (const members of membersByTeam.values()) {
+      for (const member of members)
+        fullNames.set(member.login, member.fullName);
+    }
+
+    const payload: BinderSignOffPayload = {
+      organization: orgName,
+      workspace: workspaceName,
+      ref,
+      rules: signOff.rules,
+      unreadable: signOff.unreadable,
+      requiredApprovals: protection?.requiredApprovals ?? null,
+      approvers: protection
+        ? {
+            groups: protection.approvalsWhitelistTeams,
+            people: protection.approvalsWhitelistUsernames,
+          }
+        : null,
+      groups: [...named].sort().map((name) => {
+        const team = orgTeams.find((candidate) => candidate.name === name);
+        return {
+          name,
+          description: team?.description ?? "",
+          members: (membersByTeam.get(name) ?? []).map((member) => ({
+            login: member.login,
+            fullName: member.fullName,
+            hasAccess: reach.person(member.login),
+          })),
+          hasAccess: reach.group(name),
+        };
+      }),
+      people: [...namedPeople].sort().map((login) => ({
+        login,
+        fullName: fullNames.get(login) ?? "",
+        hasAccess: reach.person(login),
+      })),
+      documents: tree.documents.map((document) => ({
+        path: document.path,
+        uid: document.uid,
+        name: document.name,
+      })),
+      canEdit: workspace.access.push,
+    };
+    return json(200, payload, baseHeaders);
+  } catch (err) {
+    logger.error("Failed to read who signs off in a binder", {
+      username: session.username,
+      organization: orgName,
+      workspace: workspaceName,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(
+      err,
+      baseHeaders,
+      "Unable to read who signs off in this binder.",
+    );
+  }
+}
+
+/**
+ * Plan one sign-off edit: read the rules where the draft has them, set this
+ * one target's owners, validate the whole file, and write it in its canonical
+ * form. Refused outside a draft or a change: rules are changed where the rest
+ * of the work is, never on a branch of their own.
+ */
+async function planSignOffRuleEdit(params: {
+  body: Record<string, unknown>;
+  tree: WorkspaceTree;
+  client: GiteaClient;
+  ref: string | null;
+  org: string;
+  workspace: string;
+}): Promise<ShapeChangeResult> {
+  const { body, tree, client, ref, org, workspace } = params;
+  if (ref === null) {
+    return {
+      error:
+        "Who signs off is changed in a draft. Open the binder in the editor first.",
+    };
+  }
+  const [rule] = parseSignOffRulesInput([body.rule]) ?? [];
+  if (!rule) {
+    return {
+      error:
+        "Name what the rule covers — the binder, a folder, a document or the sign-off rules — and who signs it off.",
+    };
+  }
+
+  // The organization's groups, read with the service account: an author who
+  // is not an owner cannot list teams, and every group would then read as
+  // one the organization does not have.
+  const privileged = createPrivilegedGiteaClient() ?? client;
+  const [current, orgTeams] = await Promise.all([
+    readSignOffRules({ client, org, workspace, ref }),
+    listOrganizationTeams({ client: privileged, org }).catch(() =>
+      listRepoTeams({ client, owner: org, repo: workspace }).catch(() => []),
+    ),
+  ]);
+  if (current.unreadable.length > 0) {
+    // Rewriting the file would drop the lines it cannot read, and with them
+    // rules Gitea may be enforcing. Say so rather than lose them.
+    return {
+      error:
+        "This binder's sign-off file has lines Bindersnap cannot read, so it will not rewrite it. Ask whoever edited it by hand to put it back.",
+    };
+  }
+
+  const next = withSignOffRule(current.rules, rule);
+  const validation = validateSignOffRules({
+    org,
+    rules: next,
+    knownTeams: orgTeams.map((team) => team.name),
+    knownDocuments: tree.documents
+      .map((entry) => entry.uid)
+      .filter((uid): uid is string => uid !== null),
+  });
+  if (!validation.ok) return { error: validation.problems.join(" ") };
+
+  const said =
+    rule.teams.length + rule.users.length === 0
+      ? "Take a sign-off rule away"
+      : "Change who signs off";
+  return {
+    operations: [
+      {
+        kind: "write",
+        path: CODEOWNERS_PATH,
+        base64Content: Buffer.from(
+          renderCodeowners(org, next),
+          "utf8",
+        ).toString("base64"),
+      },
+    ],
+    title: said,
+    message: said,
+  };
+}
+
+/**
+ * A folder act, with the sign-off rules kept in step: renaming a folder moves
+ * its rules, archiving one drops them, in the same commit. Without it a
+ * renamed folder silently loses its rule, because the rule still names the
+ * old path.
+ */
+async function withFolderRules(params: {
+  planned: ShapeChangeResult;
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  ref: string | null;
+  rewrite: (rules: SignOffRule[]) => SignOffRule[];
+}): Promise<ShapeChangeResult> {
+  const { planned, client, org, workspace, ref, rewrite } = params;
+  if ("error" in planned) return planned;
+  const current = await readSignOffRules({
+    client,
+    org,
+    workspace,
+    ...(ref ? { ref } : {}),
+  }).catch(() => null);
+  if (!current || !current.exists || current.unreadable.length > 0) {
+    return planned;
+  }
+  const next = rewrite(current.rules);
+  if (renderCodeowners(org, next) === renderCodeowners(org, current.rules)) {
+    return planned;
+  }
+  return {
+    ...planned,
+    operations: [
+      ...planned.operations,
+      {
+        kind: "write",
+        path: CODEOWNERS_PATH,
+        base64Content: Buffer.from(
+          renderCodeowners(org, next),
+          "utf8",
+        ).toString("base64"),
+      },
+    ],
+  };
+}
+
+/**
+ * One group's page: who is in it, the binders it can use, and where it signs
+ * off — every rule naming it in every binder the reader can read, read live
+ * from each binder's `.gitea/CODEOWNERS` on `main`. No copy is kept.
+ *
+ * Every member of the organization may read it; the group's people are read
+ * with the service account because a member who is not an owner cannot list
+ * teams. Only owners change it, through the existing group routes.
+ *
+ * A read, so never gated.
+ */
+async function handleOrganizationGroupPage(
+  req: Request,
+  baseHeaders: Headers,
+  orgName: string,
+  groupName: string,
+): Promise<Response> {
+  const auth = await requireSession(req, baseHeaders);
+  if (auth instanceof Response) return auth;
+  const { client, session } = auth;
+
+  try {
+    const organization = await findOrganization({ client, org: orgName });
+    if (!organization) {
+      return json(404, { error: "No such organization." }, baseHeaders);
+    }
+
+    const privileged = createPrivilegedGiteaClient() ?? client;
+    // **Members only, before any privileged read.** An organization can be
+    // visible to everyone, and the service token reads its teams and their
+    // people; someone outside it is told there is no such group, the same
+    // answer a group that does not exist gets.
+    const membership = await privileged.GET("/orgs/{org}/members/{username}", {
+      params: { path: { org: orgName, username: session.username } },
+    });
+    if (!membership.response.ok) {
+      return json(404, { error: "No such group." }, baseHeaders);
+    }
+    const teams = await listOrganizationTeams({
+      client: privileged,
+      org: orgName,
+    });
+    const team = teams.find(
+      (candidate) => candidate.name.toLowerCase() === groupName.toLowerCase(),
+    );
+    if (!team || isEveryoneTeam(team.name)) {
+      return json(404, { error: "No such group." }, baseHeaders);
+    }
+
+    const [members, teamRepos, readable, canManage] = await Promise.all([
+      listTeamMembers({ client: privileged, teamId: team.id }).catch(() => []),
+      listTeamRepos({ client: privileged, teamId: team.id }).catch(() => []),
+      // Only the binders the reader can read: a group page must not tell a
+      // reviewer about a binder they cannot open.
+      listOrganizationWorkspaces({ client, org: orgName }).catch(() => []),
+      isOrganizationOwnerDirect({
+        client,
+        org: orgName,
+        username: session.username,
+      }).catch(() => false),
+    ]);
+    const readableNames = new Set(readable.map((binder) => binder.name));
+
+    const perBinder = await Promise.all(
+      [...readableNames].sort().map(async (binder) => {
+        const [rules, protection] = await Promise.all([
+          readSignOffRules({ client, org: orgName, workspace: binder }).catch(
+            () => ({ exists: false, rules: [], unreadable: [] }),
+          ),
+          readWorkspaceProtection(orgName, binder),
+        ]);
+        const naming = rules.rules.filter((rule) =>
+          rule.teams.some((t) => t.toLowerCase() === team.name.toLowerCase()),
+        );
+        const tree =
+          naming.length > 0
+            ? await readWorkspaceTree({
+                client,
+                org: orgName,
+                workspace: binder,
+              }).catch(() => null)
+            : null;
+        return {
+          binder,
+          approver: (protection?.approvalsWhitelistTeams ?? []).includes(
+            team.name,
+          ),
+          places: placesGroupSignsOff({
+            binder,
+            group: team.name,
+            rules: naming,
+            documents: (tree?.documents ?? []).map((document) => ({
+              path: document.path,
+              uid: document.uid,
+              name: document.name,
+            })),
+          }),
+        };
+      }),
+    );
+
+    const granted = new Set<string>(teamRepos);
+
+    const payload: OrganizationGroupPagePayload = {
+      organization: orgName,
+      group: {
+        name: team.name,
+        description: team.description,
+        access: team.codeAccess,
+      },
+      members: members
+        .map((member) => ({ login: member.login, fullName: member.fullName }))
+        .sort((a, b) =>
+          (a.fullName || a.login).localeCompare(b.fullName || b.login),
+        ),
+      canManage,
+      binders: perBinder
+        .filter((entry) => granted.has(entry.binder))
+        .map((entry) => ({ name: entry.binder, approver: entry.approver })),
+      signsOff: perBinder.flatMap((entry) => entry.places),
+    };
+    return json(200, payload, baseHeaders);
+  } catch (err) {
+    logger.error("Failed to read a group", {
+      username: session.username,
+      organization: orgName,
+      group: groupName,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return responseFromError(err, baseHeaders, "Unable to read the group.");
   }
 }
 
@@ -12801,8 +13628,14 @@ async function resolveReadableRef(params: {
   username: string;
   refRaw: string | null;
 }): Promise<{ ref: string } | { error: string } | null> {
-  const asked = (params.refRaw ?? "").trim();
-  if (asked === "") return null;
+  const raw = (params.refRaw ?? "").trim();
+  if (raw === "") return null;
+  // Compared under the name Gitea reads it by: `refs/heads/draft/bob/1` is
+  // `draft/bob/1`, and must meet the same check.
+  const asked = normalizeReadableRef(raw);
+  if (asked === null) {
+    return { error: "That is not a branch or a version of this binder." };
+  }
 
   const unproposed = isDraftBranch(asked)
     ? await listBinderDrafts({
@@ -12811,6 +13644,31 @@ async function resolveReadableRef(params: {
         workspace: params.workspace,
       })
     : [];
+  // A bare commit id is a way to the same files: refused when it is the
+  // newest commit of somebody else's draft.
+  const looksLikeCommit = /^[0-9a-f]{7,64}$/i.test(asked);
+  const othersHead =
+    looksLikeCommit && unproposed.length === 0
+      ? await listBinderDrafts({
+          client: params.client,
+          org: params.org,
+          workspace: params.workspace,
+        })
+      : unproposed;
+  if (
+    looksLikeCommit &&
+    othersHead.some(
+      (entry) =>
+        entry.owner !== params.username &&
+        entry.changeNumber === null &&
+        (entry.head ?? "").toLowerCase().startsWith(asked.toLowerCase()),
+    )
+  ) {
+    return {
+      error:
+        "That draft is not yours. Other people's drafts are visible as existing and never as contents.",
+    };
+  }
   const stillADraft = unproposed.find((entry) => entry.branch === asked);
   if (stillADraft && stillADraft.owner !== params.username) {
     return {
@@ -13095,7 +13953,11 @@ async function handleWorkspaceDocumentDetail(
         versions,
         latestVersion: versions[0] ?? null,
         folders: tree.folders,
-        openChanges: touching.map((entry) => entry.pullRequest),
+        // With who may write each, which Edit asks about.
+        openChanges: touching.map((entry) => ({
+          ...entry.pullRequest,
+          coEditors: readCoEditors(entry.pullRequest),
+        })),
       },
       baseHeaders,
     );
@@ -13456,10 +14318,12 @@ async function resolveChangeToJoin(params: {
   org: string;
   workspace: string;
   raw: string | null;
+  /** Who is saving: only the change's author and co-editors may. */
+  username: string;
 }): Promise<
   { changeNumber: number; branch: string } | { error: string } | null
 > {
-  const { client, org, workspace, raw } = params;
+  const { client, org, workspace, raw, username } = params;
   if (raw === null || raw.trim() === "") return null;
 
   const changeNumber = Number(raw);
@@ -13479,6 +14343,12 @@ async function resolveChangeToJoin(params: {
     return {
       error: `Change ${changeNumber} is not open in this binder, so there is nothing to add to.`,
     };
+  }
+
+  // Somebody else's proposal is theirs to change. Being able to write in the
+  // binder is not being asked to write in this.
+  if (!mayEditChange(match, username)) {
+    return { error: NOT_AN_EDITOR };
   }
 
   // A sign-off change rewrites who has to approve things. Filing a policy into
@@ -13551,6 +14421,7 @@ async function resolveWorkTarget(params: {
     org,
     workspace,
     raw: changeRaw,
+    username,
   });
   if (change && "error" in change) return change;
   if (change) {
@@ -14617,6 +15488,21 @@ function buildShapeBranchName(
  * Like every other write to a binder, it proposes rather than changes: `main`
  * is protected, so this opens a change request and answers with its number.
  */
+const STALE_SAVE =
+  "Somebody else saved this document after you opened it, so saving would replace their words. Nothing was saved. Copy what you wrote, then reload to see theirs.";
+
+/**
+ * Git's own name for a file's contents: SHA-1 of `blob <size>\0` and the
+ * bytes. It is what a tree lists for the file, so the next save can say
+ * which version it was written on.
+ */
+export function gitBlobSha(bytes: ArrayBuffer): string {
+  const hasher = new Bun.CryptoHasher("sha1");
+  hasher.update(`blob ${bytes.byteLength}\0`);
+  hasher.update(new Uint8Array(bytes));
+  return hasher.digest("hex");
+}
+
 async function handleReviseWorkspaceDocument(
   req: Request,
   baseHeaders: Headers,
@@ -14644,6 +15530,9 @@ async function handleReviseWorkspaceDocument(
   const fromEditor = source === "editor";
   const converted = source === "converted";
   const fold = parseOptionalString(form.get("fold")) === "true";
+  // The blob the editor started from: a save onto a file somebody else has
+  // saved since is refused rather than written over theirs.
+  const basedOn = parseOptionalString(form.get("basedOn"));
 
   if (!file || !documentPath) {
     return json(
@@ -14719,6 +15608,15 @@ async function handleReviseWorkspaceDocument(
         },
         baseHeaders,
       );
+    }
+
+    // **Two people in one change, one file.** Co-editors write the same
+    // branch, and a save is a whole file: the later one replaced the earlier
+    // without either knowing. Git answers this with a hash of what you
+    // started from, and so does this: if the file on the branch is no longer
+    // the one the editor loaded, nothing is written.
+    if (target && basedOn && existing.sha && basedOn !== existing.sha) {
+      return json(409, { error: STALE_SAVE, code: "stale" }, baseHeaders);
     }
 
     const buffer = await file.arrayBuffer();
@@ -14858,6 +15756,8 @@ async function handleReviseWorkspaceDocument(
         slugPath: existing.slugPath,
         branch: proposed.branch,
         pullRequestNumber: proposed.changeNumber,
+        // What the editor saves on top of next time.
+        sha: gitBlobSha(buffer),
       },
       baseHeaders,
     );
@@ -17268,11 +18168,14 @@ async function handleAdminSignups(
   try {
     return json(
       200,
-      await reportSignups({
-        signups: signupSourceStore().list(),
-        organizations: await organizationStore.list(),
-        access: (id) => subscriptionStore.resolveAccess(id),
-      }),
+      {
+        ...(await reportSignups({
+          signups: signupSourceStore().list(),
+          organizations: await organizationStore.list(),
+          access: (id) => subscriptionStore.resolveAccess(id),
+        })),
+        resourceRequests: reportResourceRequests(resourceRequestStore().list()),
+      },
       baseHeaders,
     );
   } catch (err) {
@@ -17701,6 +18604,47 @@ async function handleRequest(req: Request): Promise<Response> {
     return response;
   }
 
+  // "Email it to me" on the public site: a plain form posted from
+  // bindersnap.com, which is not an allowed origin, by a reader with no
+  // account. Routed before the origin check for that reason, and it trusts
+  // nothing it is sent — see `resource-requests.ts`.
+  if (pathname === "/site/resource-requests" && method === "POST") {
+    const response = await handleResourceRequest(req, clientIp, {
+      store: resourceRequestStore(),
+      limited: (ip) => resourceRequestLimiter.limited(ip),
+      send: (params) => {
+        queueEmail({ kind: "resource-request", ...params });
+      },
+      siteOrigin: config.siteOrigin,
+    });
+    logger.info("Response sent", {
+      method,
+      path: pathname,
+      status: response.status,
+      durationMs: Date.now() - startMs,
+    });
+    return response;
+  }
+  if (
+    pathname === "/site/resource-requests/unsubscribe" &&
+    (method === "GET" || method === "POST")
+  ) {
+    const { response, email } = handleResourceUnsubscribe(req, {
+      store: resourceRequestStore(),
+      siteOrigin: config.siteOrigin,
+    });
+    if (email) {
+      logger.info("A site reader unsubscribed from email", {});
+    }
+    logger.info("Response sent", {
+      method,
+      path: pathname,
+      status: response.status,
+      durationMs: Date.now() - startMs,
+    });
+    return response;
+  }
+
   const originError = enforceStateChangingOrigin(req, baseHeaders);
   if (originError) {
     const durationMs = Date.now() - startMs;
@@ -18063,6 +19007,9 @@ async function handleRequest(req: Request): Promise<Response> {
     const organizationGroupsMatch = pathname.match(
       /^\/api\/app\/orgs\/([^/]+)\/groups$/,
     );
+    const organizationGroupMatch = pathname.match(
+      /^\/api\/app\/orgs\/([^/]+)\/groups\/([^/]+)$/,
+    );
     const organizationGroupMembersMatch = pathname.match(
       /^\/api\/app\/orgs\/([^/]+)\/groups\/([^/]+)\/members$/,
     );
@@ -18218,6 +19165,13 @@ async function handleRequest(req: Request): Promise<Response> {
         req,
         baseHeaders,
         organizationGroupsMatch[1]!,
+      );
+    } else if (organizationGroupMatch && method === "GET") {
+      response = await handleOrganizationGroupPage(
+        req,
+        baseHeaders,
+        organizationGroupMatch[1]!,
+        decodeURIComponent(organizationGroupMatch[2]!),
       );
     } else if (organizationGroupMembersMatch && method === "POST") {
       response = await handleOrganizationGroupMember(
@@ -18401,6 +19355,32 @@ async function handleRequest(req: Request): Promise<Response> {
         workspaceRulesMatch[1]!,
         workspaceRulesMatch[2]!,
       );
+    } else if (workspaceSignOffMatch && method === "GET") {
+      response = await handleBinderSignOffView(
+        req,
+        baseHeaders,
+        workspaceSignOffMatch[1]!,
+        workspaceSignOffMatch[2]!,
+        url.searchParams.get("draft"),
+        url.searchParams.get("change"),
+        url.searchParams.get("ref"),
+      );
+    } else if (workspaceSignOffMatch && method === "PUT") {
+      return await handleBinderShapeChange(
+        req,
+        baseHeaders,
+        workspaceSignOffMatch[1]!,
+        workspaceSignOffMatch[2]!,
+        ({ body, tree, client, ref }) =>
+          planSignOffRuleEdit({
+            body,
+            tree,
+            client,
+            ref,
+            org: workspaceSignOffMatch[1]!,
+            workspace: workspaceSignOffMatch[2]!,
+          }),
+      );
     } else if (workspaceSignOffMatch && method === "POST") {
       response = await handleBinderSignOffRules(
         req,
@@ -18580,12 +19560,24 @@ async function handleRequest(req: Request): Promise<Response> {
         baseHeaders,
         workspaceFolderRenamesMatch[1]!,
         workspaceFolderRenamesMatch[2]!,
-        ({ body, tree }) =>
-          planFolderRename({
-            from: typeof body.from === "string" ? body.from : "",
-            to: typeof body.to === "string" ? body.to : "",
-            paths: tree.paths,
-            existingFolders: tree.folders,
+        ({ body, tree, client, ref }) =>
+          withFolderRules({
+            planned: planFolderRename({
+              from: typeof body.from === "string" ? body.from : "",
+              to: typeof body.to === "string" ? body.to : "",
+              paths: tree.paths,
+              existingFolders: tree.folders,
+            }),
+            client,
+            ref,
+            org: workspaceFolderRenamesMatch[1]!,
+            workspace: workspaceFolderRenamesMatch[2]!,
+            rewrite: (rules) =>
+              moveFolderRules(
+                rules,
+                normalizeFolder(typeof body.from === "string" ? body.from : ""),
+                normalizeFolder(typeof body.to === "string" ? body.to : ""),
+              ),
           }),
       );
     } else if (workspaceDocumentRenamesMatch && method === "POST") {
@@ -18651,12 +19643,25 @@ async function handleRequest(req: Request): Promise<Response> {
         baseHeaders,
         workspaceFolderArchivesMatch[1]!,
         workspaceFolderArchivesMatch[2]!,
-        ({ body, tree }) =>
-          planFolderArchive({
-            folder: typeof body.folder === "string" ? body.folder : "",
-            paths: tree.paths,
-            documents: tree.documents,
-            existingFolders: tree.folders,
+        ({ body, tree, client, ref }) =>
+          withFolderRules({
+            planned: planFolderArchive({
+              folder: typeof body.folder === "string" ? body.folder : "",
+              paths: tree.paths,
+              documents: tree.documents,
+              existingFolders: tree.folders,
+            }),
+            client,
+            ref,
+            org: workspaceFolderArchivesMatch[1]!,
+            workspace: workspaceFolderArchivesMatch[2]!,
+            rewrite: (rules) =>
+              dropFolderRules(
+                rules,
+                normalizeFolder(
+                  typeof body.folder === "string" ? body.folder : "",
+                ),
+              ),
           }),
       );
     } else if (workspaceDocumentRestoresMatch && method === "POST") {

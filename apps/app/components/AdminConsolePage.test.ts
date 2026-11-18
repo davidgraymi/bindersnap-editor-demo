@@ -235,6 +235,27 @@ const signups: AdminSignupsPayload = {
       organizations: [{ name: "lakeside", billing: "paying" }],
     },
   ],
+  resourceRequests: {
+    people: 2,
+    byResource: [
+      { resource: "/templates/hand-hygiene-policy", requests: 2 },
+      { resource: "/manuals/hospice-policy-and-procedure-manual", requests: 1 },
+    ],
+    recent: [
+      {
+        email: "don@riverside.example",
+        resource: "/templates/hand-hygiene-policy",
+        requestedAt: Date.UTC(2026, 10, 9),
+        unsubscribed: false,
+      },
+      {
+        email: "admin@valley.example",
+        resource: "/manuals/hospice-policy-and-procedure-manual",
+        requestedAt: Date.UTC(2026, 10, 8),
+        unsubscribed: true,
+      },
+    ],
+  },
 };
 const mockGetAdminSignups = mock(async () => signups);
 
@@ -424,6 +445,7 @@ test("signups show which pages and sites brought people in, and who pays", async
       "First page of the visit",
       "Sent by",
       "Newest signups",
+      "Asked for a page by email",
     ]);
     const firstPage = panels[0]!.textContent ?? "";
     expect(firstPage).toContain("/glossary/qapi");
@@ -434,6 +456,10 @@ test("signups show which pages and sites brought people in, and who pays", async
     expect(newest).toContain("/pricing");
     expect(newest).toContain("Paying");
     expect(container.textContent).toContain("3 signups since Oct 1, 2026");
+    const asked = panels[3]!.textContent ?? "";
+    expect(asked).toContain("2 people");
+    expect(asked).toContain("don@riverside.example");
+    expect(asked).toContain("Unsubscribed. Do not write.");
   } finally {
     unmount();
   }

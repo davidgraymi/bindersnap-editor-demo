@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Download, FileText } from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 
 import { sanitizeHtml } from "../../../packages/utils/sanitizer";
 import {
@@ -56,7 +56,16 @@ type PreviewState =
   | { status: "loading" }
   | { status: "text"; text: string; markdown: boolean; size: number }
   /** A Word file, read into the semantic HTML that was inside it all along. */
-  | { status: "richText"; html: string; size: number }
+  | {
+      status: "richText";
+      html: string;
+      size: number;
+      /**
+       * Written in Bindersnap's editor, so it is set here as it is there:
+       * `doc-preview-written`. A Word file's HTML has no page of ours to match.
+       */
+      written?: boolean;
+    }
   | { status: "object"; url: string; kind: "pdf" | "image"; size: number }
   | { status: "unsupported"; size: number | null }
   | { status: "error"; message: string };
@@ -168,6 +177,7 @@ export function DocumentPreview({
               status: "richText",
               html: sanitizeHtml(editorHtml),
               size: blob.size,
+              written: true,
             });
             return;
           }
@@ -238,7 +248,7 @@ export function DocumentPreview({
         className={`doc-preview-fallback${failed ? " doc-preview-fallback--error" : ""}`}
         role={failed ? "status" : undefined}
       >
-        <FileText size={16} strokeWidth={1.5} aria-hidden="true" />
+        <AppIcon icon={ICON.document} size="md" />
         <span className="doc-preview-fallback-main">
           <span className="doc-preview-fallback-name">
             {fileName ?? "This version"}
@@ -264,7 +274,7 @@ export function DocumentPreview({
       {bare ? null : (
         <header className="doc-preview-toolbar">
           <span className="doc-preview-filename">
-            <FileText size={14} strokeWidth={1.5} aria-hidden="true" />
+            <AppIcon icon={ICON.document} size="sm" />
             <span
               className={`doc-preview-filename-text${
                 isWrittenHere(fileName)
@@ -325,7 +335,9 @@ export function DocumentPreview({
         ) : state.status === "richText" ? (
           <article
             ref={proseRef}
-            className="doc-preview-sheet doc-preview-prose"
+            className={`doc-preview-sheet doc-preview-prose${
+              state.written ? " doc-preview-written" : ""
+            }`}
             // Mammoth emits a small semantic subset of HTML, and the result is
             // sanitized before it lands here.
             dangerouslySetInnerHTML={{ __html: state.html }}
@@ -384,7 +396,7 @@ function DownloadButtons({
           disabled={downloading}
           onClick={() => onExport("pdf")}
         >
-          <Download size={14} strokeWidth={1.5} aria-hidden="true" />
+          <AppIcon icon={ICON.download} size="sm" />
           <span className="doc-preview-download-label">
             {downloading ? "Preparing…" : "PDF"}
           </span>
@@ -396,7 +408,7 @@ function DownloadButtons({
           disabled={downloading}
           onClick={() => onExport("docx")}
         >
-          <Download size={14} strokeWidth={1.5} aria-hidden="true" />
+          <AppIcon icon={ICON.download} size="sm" />
           <span className="doc-preview-download-label">Word</span>
         </button>
       </span>
@@ -410,7 +422,7 @@ function DownloadButtons({
       disabled={downloading || !fileName}
       onClick={onDownload}
     >
-      <Download size={14} strokeWidth={1.5} aria-hidden="true" />
+      <AppIcon icon={ICON.download} size="sm" />
       <span className="doc-preview-download-label">
         {downloading ? "Downloading…" : "Download"}
       </span>

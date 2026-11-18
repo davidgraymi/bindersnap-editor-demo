@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { Archive, Download, FileText } from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 
 import { binderHistoryQuery } from "../data/queries";
 import { followInApp } from "../appLink";
@@ -18,7 +18,7 @@ import {
 } from "../binderHistory";
 import { formatDocumentName, formatTimestamp } from "../documentDisplay";
 import { nameFor, usePeopleNames } from "../usePeopleNames";
-import { AppIcon } from "./AppIcon";
+
 import { PersonAvatar } from "./PersonAvatar";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
 
@@ -180,7 +180,7 @@ export function BinderHistory({
             disabled={versions === null || shown.length === 0}
             onClick={exportRecord}
           >
-            <AppIcon icon={Download} size="md" />
+            <AppIcon icon={ICON.download} size="md" />
           </button>
         </div>
 
@@ -262,7 +262,7 @@ function ChangeEntry({
         // A binder is a git repository and somebody may tag it themselves.
         // The entry says so rather than inventing a change to point at.
         <span className="bs-knot" aria-hidden="true">
-          <AppIcon icon={FileText} size="sm" />
+          <AppIcon icon={ICON.document} size="sm" />
         </span>
       ) : (
         <a
@@ -309,7 +309,7 @@ function ChangeEntry({
             <li className="bs-versionrow" key={row.tag}>
               <span className="bs-row-icon">
                 <AppIcon
-                  icon={row.kind === "archived" ? Archive : FileText}
+                  icon={row.kind === "archived" ? ICON.archive : ICON.document}
                   size="sm"
                 />
               </span>

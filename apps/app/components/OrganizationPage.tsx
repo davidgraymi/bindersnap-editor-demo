@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useIsReadOnly } from "../readOnlyContext";
 import { useOrganizationDisplayName } from "../useOrganizationDisplayName";
-import { BookOpen, FilePen } from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 
 import { organizationBindersQuery } from "../data/queries";
 import type { WorkspaceSummary } from "../../../packages/api-schema/schemas/workspaces";
@@ -329,11 +329,7 @@ export function OrganizationPage({
                     }
                   >
                     <span className="bs-row-icon">
-                      <BookOpen
-                        size={16}
-                        strokeWidth={1.5}
-                        aria-hidden="true"
-                      />
+                      <AppIcon icon={ICON.binder} size="md" />
                     </span>
                     <span className="bs-row-body">
                       <span className="bs-row-name">
@@ -400,7 +396,7 @@ function BinderFacts({ binder }: { binder: WorkspaceSummary }) {
       >
         {open > 0 ? (
           <>
-            <FilePen size={13} strokeWidth={1.75} aria-hidden="true" />
+            <AppIcon icon={ICON.changeRequest} size="sm" />
             <span aria-hidden="true">{open}</span>
             <span className="sr-only">{openLabel}</span>
           </>

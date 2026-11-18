@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { Download, Eye, FilePen } from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 
 import { DocumentPreview } from "./DocumentPreview";
 import { describeFileKind } from "../documentFile";
@@ -15,6 +15,8 @@ interface EditorFileCoverProps {
   file: Blob;
   /** Turn it into a Bindersnap document in the draft; absent, it cannot be. */
   onConvert?: () => void;
+  /** Upload a new version of it into the draft; absent, it cannot be here. */
+  onUploadVersion?: () => void;
 }
 
 /**
@@ -32,6 +34,7 @@ export function EditorFileCover({
   fileName,
   file,
   onConvert,
+  onUploadVersion,
 }: EditorFileCoverProps) {
   const loadFile = useCallback(() => Promise.resolve(file), [file]);
   const [downloading, setDownloading] = useState(false);
@@ -53,7 +56,7 @@ export function EditorFileCover({
     <div className="doc-editor-cover">
       <aside className="doc-editor-cover-note" aria-label="About this file">
         <span className="doc-editor-cover-icon" aria-hidden="true">
-          <Eye size={16} strokeWidth={1.75} />
+          <AppIcon icon={ICON.preview} size="md" />
         </span>
         <span className="doc-editor-cover-text">
           <strong>{kind} · View only</strong>
@@ -70,8 +73,20 @@ export function EditorFileCover({
               className="bs-btn bs-btn-primary bs-btn--sm"
               onClick={onConvert}
             >
-              <FilePen size={14} strokeWidth={1.75} aria-hidden="true" />
+              <AppIcon icon={ICON.edit} size="sm" />
               Edit in Bindersnap
+            </button>
+          ) : null}
+          {onUploadVersion ? (
+            <button
+              type="button"
+              className={`bs-btn bs-btn--sm ${
+                onConvert ? "bs-btn-secondary" : "bs-btn-primary"
+              }`}
+              onClick={onUploadVersion}
+            >
+              <AppIcon icon={ICON.upload} size="sm" />
+              Upload new version
             </button>
           ) : null}
           <button
@@ -80,7 +95,7 @@ export function EditorFileCover({
             onClick={download}
             disabled={downloading}
           >
-            <Download size={14} strokeWidth={1.75} aria-hidden="true" />
+            <AppIcon icon={ICON.download} size="sm" />
             Download
           </button>
         </span>

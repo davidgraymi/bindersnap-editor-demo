@@ -1,19 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { BookCheck, Check, ChevronDown, GitBranch } from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 
-import {
-  binderChangeQuery,
-  binderChangesQuery,
-  binderDraftQuery,
-} from "../data/queries";
+import { binderChangesQuery, binderDraftQuery } from "../data/queries";
 import type {
   OwnDraft,
   WorkspaceChangeSummary,
 } from "../../../packages/api-schema/schemas/workspaces";
 import { describeBranch } from "../branchLabel";
 import { nameFor, usePeopleNames } from "../usePeopleNames";
-import { AppIcon } from "./AppIcon";
+
 import { describeDraft } from "./BinderDraftPicker";
 import { useFloatingMenu } from "./useFloatingMenu";
 
@@ -31,6 +27,12 @@ import { useFloatingMenu } from "./useFloatingMenu";
  * what somebody has asked to change, and what you are still working on.
  * Somebody else's draft is not here — drafts are visible as existing and never
  * as contents, and the draft picker is where they are listed.
+ *
+ * **One branch, one row, one name.** A draft you have proposed is a branch
+ * with a change request open on it: it is listed once, under Change requests,
+ * as "Your draft", and not again under Your drafts. The button says what the
+ * ticked row says — the change's title — so the menu, the button and the card
+ * over the tree never call one branch three things.
  */
 
 interface BinderRefPickerProps {
@@ -40,7 +42,7 @@ interface BinderRefPickerProps {
   current: string | null;
   /** Read the tree at another ref — null for the record. */
   onPick: (ref: string | null) => void;
-  /** Open one of your drafts, which is edited rather than read. */
+  /** Read one of your drafts: a branch like the others, under its own name. */
   onPickDraft: (branch: string) => void;
 }
 
@@ -81,29 +83,26 @@ export function BinderRefPicker({
   // No drafts to offer is an ordinary answer; failing to list them is not
   // worth a message inside a menu about something else.
   const drafts: OwnDraft[] =
-    useQuery({ ...binderDraftQuery(org, binder), enabled: asked }).data
-      ?.drafts ?? [];
+    useQuery({
+      ...binderDraftQuery(org, binder),
+      // Also on a branch, which may be one of your drafts — see `label`.
+      enabled: asked || current !== null,
+    }).data?.drafts ?? [];
 
-  /**
-   * What the author called the branch, when a change sits on it.
-   *
-   * A proposed draft keeps the name it was given, and the change's own page
-   * says "from Hand hygiene audit" rather than "from Carol's draft" — the
-   * branch's shape is not its name. The picker over the same branch has to say
-   * the same thing, or one branch reads as two. The branch's shape is still a
-   * fair name for it while that is being read, or when it cannot be.
-   */
   const onCurrent =
     current === null
       ? undefined
       : changes.find((change) => change.branchName === current);
-  const currentChange = useQuery({
-    ...binderChangeQuery(org, binder, onCurrent?.number ?? 0),
-    enabled: onCurrent !== undefined,
-  });
+  /** One of your drafts, read as a branch: called what you called it. */
+  const ownDraft =
+    current === null
+      ? undefined
+      : drafts.find((draft) => draft.branch === current);
   const label =
-    (onCurrent && currentChange.data?.branchLabel) ||
-    describeRef(current, nameOf);
+    onCurrent?.title.trim() || ownDraft?.name || describeRef(current, nameOf);
+  const yours = new Set(drafts.map((draft) => draft.branch));
+  // Proposed ones are listed with the other change requests.
+  const unproposed = drafts.filter((draft) => draft.changeNumber === null);
   const branches = changes.filter((change) => change.branchName);
 
   return (
@@ -118,9 +117,12 @@ export function BinderRefPicker({
         title={current ?? "The published binder"}
         onClick={() => setOpen((was) => !was)}
       >
-        <AppIcon icon={current === null ? BookCheck : GitBranch} size="sm" />
+        <AppIcon
+          icon={current === null ? ICON.onRecord : ICON.draft}
+          size="sm"
+        />
         <span className="bs-refpick-label">{label}</span>
-        <AppIcon icon={ChevronDown} size="sm" />
+        <AppIcon icon={ICON.chevronDown} size="sm" />
       </button>
 
       {open ? (
@@ -148,10 +150,11 @@ export function BinderRefPicker({
                 key={change.number}
                 on={current === change.branchName}
                 name={change.title}
-                meta={`Change ${change.number} · ${describeBranch(
-                  change.branchName,
-                  nameOf,
-                )}`}
+                meta={`Change ${change.number} · ${
+                  yours.has(change.branchName)
+                    ? "Your draft"
+                    : describeBranch(change.branchName, nameOf)
+                }`}
                 onPick={() => {
                   setOpen(false);
                   if (current !== change.branchName) onPick(change.branchName);
@@ -160,12 +163,12 @@ export function BinderRefPicker({
             ))
           )}
 
-          {drafts.length > 0 ? (
+          {unproposed.length > 0 ? (
             <>
               <div className="bs-panel-bar bs-draftmenu-split">
                 <span className="bs-section-title">Your drafts</span>
               </div>
-              {drafts.map((draft) => (
+              {unproposed.map((draft) => (
                 <RefRow
                   key={draft.branch}
                   on={current === draft.branch}
@@ -199,7 +202,7 @@ function RefRow({
   return (
     <div className={`bs-row${on ? " bs-row--on" : ""}`}>
       <span className="bs-row-icon" aria-hidden="true">
-        {on ? <AppIcon icon={Check} size="sm" /> : null}
+        {on ? <AppIcon icon={ICON.selected} size="sm" /> : null}
       </span>
       <button
         type="button"

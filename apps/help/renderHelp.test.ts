@@ -73,7 +73,12 @@ describe("the help pages", () => {
     expect(
       html.match(/<script(?! type="application\/ld\+json")/g),
     ).toHaveLength(2);
-    expect(html).toContain("<h2>How many approvals</h2>");
+    // A section has an address, and the page lists its sections first.
+    expect(html).toContain(
+      '<h2 id="how-many-approvals">How many approvals</h2>',
+    );
+    expect(html).toContain('<a href="#how-many-approvals">');
+    expect(html).toContain("Still stuck?");
   });
 
   test("a link to a page unfurls into the Bindersnap card", () => {

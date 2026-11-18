@@ -1,3 +1,4 @@
+import { guideForRoute, helpHref } from "../helpLinks";
 import {
   useCallback,
   useEffect,
@@ -6,16 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import { useIsReadOnly } from "../readOnlyContext";
-import {
-  CircleHelp,
-  CreditCard,
-  LogOut,
-  Map as MapIcon,
-  MessageSquarePlus,
-  Moon,
-  Shield,
-  UserRound,
-} from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 import type { SessionUser } from "../api";
 import { buildDocumentsUrl, parseDocumentsViewState } from "../documentsView";
 import { followInApp, navigateToHref } from "../appLink";
@@ -25,11 +17,12 @@ import { useOnboarding } from "../useOnboarding";
 import { routeToPath, type AppRoute } from "../routes";
 import { BinderShell } from "./BinderShell";
 import { MyDrafts } from "./MyDrafts";
+import { GroupPage } from "./GroupPage";
 import { OrganizationPage } from "./OrganizationPage";
 import { LocationTrail } from "./LocationTrail";
 import { useWriteAction } from "../paywallContext";
 import { AdminConsolePage } from "./AdminConsolePage";
-import { AppIcon } from "./AppIcon";
+
 import { BindersnapLogoMark } from "./BindersnapLogoMark";
 import { DocumentsPage } from "./DocumentsPage";
 import { ReviewQueuePage } from "./ReviewQueuePage";
@@ -48,7 +41,6 @@ import { NavSearch } from "./NavSearch";
 import { CreateMenu } from "./CreateMenu";
 import { AccountSettingsPage } from "./AccountSettingsPage";
 import { AvatarFace } from "./PersonAvatar";
-import { siteUrl } from "../siteLink";
 import { useCollapsedSidebar } from "../useCollapsedSidebar";
 import { formatDocumentName } from "../documentDisplay";
 import type {
@@ -130,21 +122,21 @@ function getInitials(name: string): string {
 function renderProfileMenuIcon(icon: string) {
   switch (icon) {
     case "account":
-      return <AppIcon icon={UserRound} size="md" />;
+      return <AppIcon icon={ICON.account} size="md" />;
     case "billing":
-      return <AppIcon icon={CreditCard} size="md" />;
+      return <AppIcon icon={ICON.billing} size="md" />;
     case "appearance":
-      return <AppIcon icon={Moon} size="md" />;
+      return <AppIcon icon={ICON.darkMode} size="md" />;
     case "admin":
-      return <AppIcon icon={Shield} size="md" />;
+      return <AppIcon icon={ICON.siteAdmin} size="md" />;
     case "guide":
-      return <AppIcon icon={MapIcon} size="md" />;
+      return <AppIcon icon={ICON.tour} size="md" />;
     case "help":
-      return <AppIcon icon={CircleHelp} size="md" />;
+      return <AppIcon icon={ICON.help} size="md" />;
     case "feedback":
-      return <AppIcon icon={MessageSquarePlus} size="md" />;
+      return <AppIcon icon={ICON.feedback} size="md" />;
     case "signout":
-      return <AppIcon icon={LogOut} size="md" />;
+      return <AppIcon icon={ICON.signOut} size="md" />;
     default:
       return null;
   }
@@ -536,7 +528,10 @@ export function AppShell({
                     <a
                       className="app-profile-menu-item"
                       role="menuitem"
-                      href={siteUrl("/help")}
+                      href={helpHref(
+                        guideForRoute(route, window.location.search) ??
+                          undefined,
+                      )}
                       target="_blank"
                       rel="noopener"
                       onClick={() => setProfileOpen(false)}
@@ -592,8 +587,16 @@ export function AppShell({
       <div className="app-body-wrap">
         {/* The map of the product. Hidden below 768px, where the top bar's own
             links take over — see AppSidebar. */}
+        {/* An address that names no binder gets the organization's map, not
+            a binder's: Documents, Change requests and Settings for a binder
+            that is not there all led to the same "not found". */}
         <AppSidebar
-          route={route}
+          route={
+            (route.kind === "binder" || route.kind === "binderDocument") &&
+            missingBinder === `${route.org}/${route.binder}`
+              ? { kind: "organization", org: route.org }
+              : route
+          }
           org={sidebarOrg}
           binder={sidebarBinder}
           onSendFeedback={canSendFeedback ? () => setFeedbackOpen(true) : null}
@@ -679,6 +682,12 @@ export function AppShell({
                   onOpenBinder={(org, binder) =>
                     onNavigate({ kind: "binder", org, binder })
                   }
+                />
+              ) : route.kind === "organization" && route.group ? (
+                <GroupPage
+                  org={route.org}
+                  group={route.group}
+                  onNavigate={onNavigate}
                 />
               ) : route.kind === "organization" ? (
                 <OrganizationPage

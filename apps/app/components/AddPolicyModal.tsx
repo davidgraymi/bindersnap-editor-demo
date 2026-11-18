@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FilePen, FileText, FolderUp, Upload, X } from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 
 import {
   buildDocumentDisplayPath,
@@ -31,7 +31,7 @@ import { anyConvertible, ConvertOnUploadField } from "./ConvertOnUploadField";
 import { binderDocumentsQuery } from "../data/queries";
 import { formatFileSize } from "../documentFile";
 import { formatDocumentName } from "../documentDisplay";
-import { AppIcon } from "./AppIcon";
+
 import { ChangeTargetField } from "./ChangeTargetField";
 import { askReviewers } from "./ProposeChangePage";
 import { ReviewerChooser } from "./ReviewerChooser";
@@ -549,11 +549,10 @@ export function AddPolicyModal({
                   disabled={submitting}
                   onChange={() => setMode("upload")}
                 />
-                <Upload
+                <AppIcon
+                  icon={ICON.upload}
+                  size="md"
                   className="bs-choice-icon"
-                  size={16}
-                  strokeWidth={1.75}
-                  aria-hidden="true"
                 />
                 <span>
                   <span className="bs-choice-name">Upload a file</span>
@@ -573,11 +572,10 @@ export function AddPolicyModal({
                     setError(null);
                   }}
                 />
-                <FilePen
+                <AppIcon
+                  icon={ICON.edit}
+                  size="md"
                   className="bs-choice-icon"
-                  size={16}
-                  strokeWidth={1.75}
-                  aria-hidden="true"
                 />
                 <span>
                   <span className="bs-choice-name">Write it here</span>
@@ -641,7 +639,7 @@ export function AddPolicyModal({
           ) : file ? (
             <div className="bs-dropzone bs-dropzone--filled">
               <span className="bs-dropzone-icon" aria-hidden="true">
-                <AppIcon icon={FileText} size="lg" />
+                <AppIcon icon={ICON.document} size="lg" />
               </span>
               <span className="bs-dropzone-file">
                 <span className="bs-dropzone-lead">{file.name}</span>
@@ -685,7 +683,7 @@ export function AddPolicyModal({
                 takeFile(event.dataTransfer.files?.[0] ?? null);
               }}
             >
-              <AppIcon icon={Upload} size="lg" aria-hidden="true" />
+              <AppIcon icon={ICON.upload} size="lg" aria-hidden="true" />
               <span className="bs-dropzone-lead">
                 Drop documents or a folder here, or choose files
               </span>
@@ -702,7 +700,7 @@ export function AddPolicyModal({
               disabled={submitting}
               onClick={() => folderInput.current?.click()}
             >
-              <AppIcon icon={FolderUp} size="sm" aria-hidden="true" />
+              <AppIcon icon={ICON.uploadFolder} size="sm" aria-hidden="true" />
               Add a whole folder
             </button>
           )}
@@ -997,7 +995,7 @@ function BulkList({
         {plan.items.map((item) => (
           <li className="bs-row" key={item.relativePath}>
             <span className="bs-row-icon" aria-hidden="true">
-              <AppIcon icon={FileText} size="sm" />
+              <AppIcon icon={ICON.document} size="sm" />
             </span>
             <span className="bs-row-body">
               <span className="bs-row-name">{item.name}</span>
@@ -1016,7 +1014,7 @@ function BulkList({
               disabled={disabled}
               onClick={() => onRemove(item.relativePath)}
             >
-              <AppIcon icon={X} size="sm" />
+              <AppIcon icon={ICON.close} size="sm" />
             </button>
           </li>
         ))}

@@ -1,4 +1,4 @@
-import { CircleCheck, CircleSlash, FilePen } from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 
 import { followInApp } from "../appLink";
 import type { ChangeOutcome } from "../documentDisplay";
@@ -27,13 +27,11 @@ export type ChangeState = "open" | "closed" | ChangeOutcome;
 
 /** Open, or how it ended — the badge GitLab puts before "requested to merge". */
 export function ChangeStateBadge({ state }: { state: ChangeState }) {
-  const props = { size: 13, strokeWidth: 1.75, "aria-hidden": true } as const;
-
   // The same glyphs a change row carries, so the list and the page agree.
   if (state === "published") {
     return (
       <span className="bs-status bs-status--published change-state">
-        <CircleCheck {...props} />
+        <AppIcon icon={ICON.published} size="sm" />
         Published
       </span>
     );
@@ -41,14 +39,14 @@ export function ChangeStateBadge({ state }: { state: ChangeState }) {
   if (state === "closed" || state === "declined" || state === "withdrawn") {
     return (
       <span className="bs-status bs-status--withdrawn change-state">
-        <CircleSlash {...props} />
+        <AppIcon icon={ICON.closed} size="sm" />
         Closed
       </span>
     );
   }
   return (
     <span className="bs-status bs-status--review change-state">
-      <FilePen {...props} />
+      <AppIcon icon={ICON.open} size="sm" />
       Open
     </span>
   );

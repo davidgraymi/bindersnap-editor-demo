@@ -1,6 +1,12 @@
 /**
  * Reading and changing a binder's sign-off rules.
  *
+ * **Rules are now changed in a draft**, one act at a time, like a rename
+ * (`setSignOffRuleInDraft` in `server.ts`). Proposing a whole new file on its
+ * own `sign-off/` branch, below, is what binder Settings did before; it stays
+ * until Settings stops editing rules, and the publish guard keeps the prefix so
+ * changes already open still publish.
+ *
  * The rules live in `.gitea/CODEOWNERS` on `main`, which is the source of
  * truth — there is no `folder_approvers` table, because a table would shadow a
  * git object Gitea enforces at merge time. `packages/utils/codeowners.ts` holds
@@ -76,6 +82,8 @@ export async function readSignOffRules(params: {
   client: GiteaClient;
   org: string;
   workspace: string;
+  /** A branch, tag or commit; `main` when left out. A draft reads its own. */
+  ref?: string;
 }): Promise<ParsedCodeowners & { exists: boolean }> {
   const file = await readSignOffFile(params);
   if (!file) return { exists: false, rules: [], unreadable: [] };

@@ -1,8 +1,10 @@
-import { ChevronDown, ChevronRight, FileText, Folder } from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 
 import { followInApp } from "../appLink";
 import type { BinderTreeFolder, BinderTreeNode } from "../binderTree";
+import { isEditorDocumentFile } from "../binderDocument";
 import { formatDocumentName } from "../documentDisplay";
+import { describeFileKind, fileExtension } from "../documentFile";
 
 /**
  * The binder's contents, drawn the way a file explorer draws a folder.
@@ -37,6 +39,13 @@ export interface BinderTreeViewProps {
    */
   isFolderOpen: (path: string) => boolean;
   onToggleFolder: (path: string) => void;
+  /**
+   * Open a folder's page. With it, a folder row is two controls, as in
+   * Explorer: the arrow opens and shuts it in place, the name opens its page.
+   */
+  onOpenFolder?: (path: string) => void;
+  /** A folder's address, so its name is a real link. */
+  folderHref?: (path: string) => string;
   onOpenDocument: (slugPath: string) => void;
   /**
    * A document's address, so its row is a link.
@@ -109,6 +118,8 @@ export function BinderTreeView({
   nodes,
   isFolderOpen,
   onToggleFolder,
+  onOpenFolder,
+  folderHref,
   onOpenDocument,
   documentHref,
   activeDocument = null,
@@ -126,6 +137,8 @@ export function BinderTreeView({
           depth={0}
           isFolderOpen={isFolderOpen}
           onToggleFolder={onToggleFolder}
+          onOpenFolder={onOpenFolder}
+          folderHref={folderHref}
           onOpenDocument={onOpenDocument}
           documentHref={documentHref}
           activeDocument={activeDocument}
@@ -157,6 +170,8 @@ function FolderRow({
   depth,
   isFolderOpen,
   onToggleFolder,
+  onOpenFolder,
+  folderHref,
   renderRowActions,
   renderRowLabel,
   rowProps,
@@ -168,7 +183,7 @@ function FolderRow({
 
   const icon = (
     <span className="binder-tree-icon" aria-hidden="true">
-      <Folder size={16} strokeWidth={1.4} />
+      <AppIcon icon={ICON.folder} size="md" />
     </span>
   );
 
@@ -190,6 +205,52 @@ function FolderRow({
             {icon}
             {instead}
           </div>
+        ) : onOpenFolder ? (
+          <div className="binder-tree-main binder-tree-main--split">
+            <button
+              type="button"
+              className="binder-tree-twisty binder-tree-twistybtn"
+              onClick={() => onToggleFolder(folder.path)}
+              aria-expanded={isOpen}
+              aria-label={
+                isOpen
+                  ? `Shut ${formatDocumentName(folder.name)}`
+                  : `Open ${formatDocumentName(folder.name)} here`
+              }
+            >
+              {isOpen ? (
+                <AppIcon icon={ICON.chevronDown} size="sm" />
+              ) : (
+                <AppIcon icon={ICON.chevronRight} size="sm" />
+              )}
+            </button>
+            <a
+              className="binder-tree-folderlink"
+              href={folderHref?.(folder.path) ?? "#"}
+              onClick={(event) => {
+                if (
+                  event.button !== 0 ||
+                  event.metaKey ||
+                  event.ctrlKey ||
+                  event.shiftKey
+                ) {
+                  return;
+                }
+                event.preventDefault();
+                onOpenFolder(folder.path);
+              }}
+            >
+              {icon}
+              <span className="binder-tree-label">
+                {formatDocumentName(folder.name)}
+              </span>
+              <span className="binder-tree-count">
+                {folder.documentCount === 1
+                  ? "1 document"
+                  : `${folder.documentCount} documents`}
+              </span>
+            </a>
+          </div>
         ) : (
           <button
             type="button"
@@ -199,9 +260,9 @@ function FolderRow({
           >
             <span className="binder-tree-twisty" aria-hidden="true">
               {isOpen ? (
-                <ChevronDown size={14} strokeWidth={1.6} />
+                <AppIcon icon={ICON.chevronDown} size="sm" />
               ) : (
-                <ChevronRight size={14} strokeWidth={1.6} />
+                <AppIcon icon={ICON.chevronRight} size="sm" />
               )}
             </span>
             {icon}
@@ -242,6 +303,8 @@ function FolderRow({
               depth={depth + 1}
               isFolderOpen={isFolderOpen}
               onToggleFolder={onToggleFolder}
+              onOpenFolder={onOpenFolder}
+              folderHref={folderHref}
               renderRowActions={renderRowActions}
               renderRowLabel={renderRowLabel}
               rowProps={rowProps}
@@ -269,6 +332,7 @@ function DocumentRow({
   const isActive = activeDocument === document.slugPath;
   const instead = renderRowLabel?.(node) ?? null;
   const { className: extra, ...dragProps } = rowProps?.(node) ?? {};
+  const written = isEditorDocumentFile(document.path);
 
   /* A document has nothing to twist open, but it lines up with the folders
      above it — a ragged left edge is what makes a tree read as a list of
@@ -277,9 +341,22 @@ function DocumentRow({
     <>
       <span className="binder-tree-twisty" aria-hidden="true" />
       <span className="binder-tree-icon" aria-hidden="true">
-        <FileText size={16} strokeWidth={1.4} />
+        <AppIcon icon={written ? ICON.document : ICON.uploadedFile} size="md" />
       </span>
     </>
+  );
+  /* **A file says what it is.** One written here opens in the editor; a Word
+     file or a PDF opens in the program that made it, and "PDF" tells this
+     reader that faster than any picture can. It is kept out of the row's
+     accessible name, which stays the document's name alone. */
+  const format = written ? null : (
+    <span
+      className="binder-tree-format"
+      title={describeFileKind(document.path)}
+      aria-hidden="true"
+    >
+      {fileExtension(document.path).toUpperCase() || "FILE"}
+    </span>
   );
 
   return (
@@ -312,6 +389,7 @@ function DocumentRow({
           <span className="binder-tree-label">
             {formatDocumentName(document.name)}
           </span>
+          {format}
         </a>
       ) : (
         <button
@@ -324,6 +402,7 @@ function DocumentRow({
           <span className="binder-tree-label">
             {formatDocumentName(document.name)}
           </span>
+          {format}
         </button>
       )}
 

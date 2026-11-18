@@ -1,4 +1,4 @@
-import { FilePen, Home, Library } from "lucide-react";
+import { AppIcon, ICON, type IconGlyph } from "./AppIcon";
 
 import { followInApp } from "../appLink";
 import { routeToPath, type AppRoute } from "../routes";
@@ -34,21 +34,21 @@ export function AppBottomNav({ route, onNavigate }: AppBottomNavProps) {
   const entries: Array<{
     key: string;
     label: string;
-    icon: typeof Home;
+    icon: IconGlyph;
     to: AppRoute;
     isActive: boolean;
   }> = [
     {
       key: "home",
       label: "Home",
-      icon: Home,
+      icon: ICON.home,
       to: { kind: "workspace" },
       isActive: route.kind === "workspace" || route.kind === "home",
     },
     {
       key: "changes",
       label: "Changes",
-      icon: FilePen,
+      icon: ICON.changeRequest,
       to: { kind: "changes" },
       isActive: route.kind === "changes",
     },
@@ -57,7 +57,7 @@ export function AppBottomNav({ route, onNavigate }: AppBottomNavProps) {
       // needs no organization to point at, and is always there.
       key: "binders",
       label: "Binders",
-      icon: Library,
+      icon: ICON.binder,
       to: { kind: "binders" },
       // A binder, a document inside one, and an organization's own pages are
       // all reached through here.
@@ -83,7 +83,7 @@ export function AppBottomNav({ route, onNavigate }: AppBottomNavProps) {
             aria-current={entry.isActive ? "page" : undefined}
             onClick={(event) => followInApp(event, () => onNavigate(entry.to))}
           >
-            <Icon size={19} strokeWidth={1.75} aria-hidden="true" />
+            <AppIcon icon={Icon} size="lg" />
             <span className="app-bottom-nav-label">{entry.label}</span>
           </a>
         );

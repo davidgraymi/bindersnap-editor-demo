@@ -1,14 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import {
-  Archive,
-  Check,
-  ChevronDown,
-  ChevronRight,
-  FileText,
-  FolderInput,
-  Pencil,
-} from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 import { useIsReadOnly } from "../readOnlyContext";
 
 import {
@@ -116,6 +108,16 @@ interface BinderDocumentsProps {
    * the tree's bar whenever the binder is not being edited.
    */
   refPicker?: ReactNode;
+  /**
+   * A folder's page: the same list, cut to what is in this folder, with no
+   * indent. Null is the binder's top folder.
+   */
+  folder?: string | null;
+  /** Open a folder's page — what a folder's name does. */
+  onOpenFolder?: (folder: string) => void;
+  folderHref?: (folder: string) => string;
+  /** Told whether the folder exists, once the binder has been read. */
+  onFolderMissing?: (missing: boolean) => void;
 }
 
 /**
@@ -193,6 +195,10 @@ export function BinderDocuments({
   onNewFolder,
   atRef = null,
   refPicker = null,
+  folder = null,
+  onOpenFolder,
+  folderHref,
+  onFolderMissing,
 }: BinderDocumentsProps) {
   const isReadOnly = useIsReadOnly();
   const queryClient = useQueryClient();
@@ -278,10 +284,30 @@ export function BinderDocuments({
     setArchiveOpen(false);
   }, [draft]);
 
-  const tree = useMemo(
-    () => (documents ? buildBinderTree(documents, folders) : []),
-    [documents, folders],
-  );
+  // **A folder's page lists what is in that folder**, the binder's own list
+  // cut to it: its documents and subfolders at the top level of the list.
+  const inFolder = useMemo(() => {
+    if (!documents || !folder) return documents;
+    const prefix = `${folder}/`;
+    return documents.filter((document) => document.path.startsWith(prefix));
+  }, [documents, folder]);
+  const folderExists =
+    !folder ||
+    folders.includes(folder) ||
+    folders.some((path) => path.startsWith(`${folder}/`)) ||
+    (inFolder?.length ?? 0) > 0;
+  useEffect(() => {
+    if (documents === null) return;
+    onFolderMissing?.(!folderExists);
+  }, [documents, folderExists, onFolderMissing]);
+
+  const tree = useMemo(() => {
+    if (!documents) return [];
+    const whole = buildBinderTree(documents, folders);
+    if (!folder) return whole;
+    // Walk down to the folder and list its children, so nothing is indented.
+    return childrenOfFolder(whole, folder);
+  }, [documents, folders, folder]);
 
   /**
    * The tree, cut down to the policies whose names match the filter.
@@ -293,14 +319,16 @@ export function BinderDocuments({
    */
   const needle = filter.trim().toLowerCase();
   const shown = useMemo(() => {
-    if (!documents || needle === "") return tree;
-    return buildBinderTree(
-      documents.filter((document) =>
+    if (!inFolder || needle === "") return tree;
+    const matches = buildBinderTree(
+      inFolder.filter((document) =>
         formatDocumentName(document.name).toLowerCase().includes(needle),
       ),
       [],
     );
-  }, [documents, needle, tree]);
+    if (!folder) return matches;
+    return childrenOfFolder(matches, folder);
+  }, [inFolder, needle, tree, folder]);
 
   // Read off the tree rather than off `folders`, so the picker offers the
   // intermediate levels the tree inferred — a folder holding only other
@@ -544,7 +572,7 @@ export function BinderDocuments({
     return <p className="app-inline-error">{error}</p>;
   }
 
-  const policyCount = documents?.length ?? 0;
+  const policyCount = inFolder?.length ?? 0;
   const folderCount = everyFolder.length;
 
   const isTouched = (node: BinderTreeNode): boolean => {
@@ -635,7 +663,7 @@ export function BinderDocuments({
               <span className="bs-panel-bar-spacer" />
               {/* Continuous save, said where the eye already is. */}
               <span className="bs-saved">
-                <Check size={13} strokeWidth={2} aria-hidden="true" />
+                <AppIcon icon={ICON.saved} size="sm" />
                 {committing ? "Saving…" : "Saved"}
               </span>
             </>
@@ -650,8 +678,12 @@ export function BinderDocuments({
                 className="bs-input bs-input--sm binder-filter"
                 type="search"
                 value={filter}
-                placeholder="Filter this binder…"
-                aria-label="Filter this binder"
+                placeholder={
+                  folder ? "Filter this folder…" : "Filter this binder…"
+                }
+                aria-label={
+                  folder ? "Filter this folder" : "Filter this binder"
+                }
                 disabled={documents === null || policyCount === 0}
                 onChange={(event) => setFilter(event.target.value)}
               />
@@ -701,13 +733,21 @@ export function BinderDocuments({
           </div>
         ) : shown.length === 0 ? (
           <div className="bs-empty">
-            <p>Nothing in this binder is called that.</p>
+            <p>
+              Nothing in this {folder ? "folder" : "binder"} is called that.
+            </p>
           </div>
         ) : (
           <BinderTreeView
             nodes={shown}
             isFolderOpen={needle === "" ? isOpen : EVERYTHING_OPEN}
             onToggleFolder={toggle}
+            {...(onOpenFolder && !draft
+              ? {
+                  onOpenFolder,
+                  ...(folderHref ? { folderHref } : {}),
+                }
+              : {})}
             onOpenDocument={onOpenDocument}
             documentHref={documentHref}
             activeDocument={activeDocument}
@@ -759,11 +799,7 @@ export function BinderDocuments({
                             )
                           }
                         >
-                          <Pencil
-                            size={14}
-                            strokeWidth={1.6}
-                            aria-hidden="true"
-                          />
+                          <AppIcon icon={ICON.edit} size="sm" />
                         </button>
                         {/* **Dragging is the fast path, not the only one.** It
                             needs a pointer, both ends of the move on screen at
@@ -780,11 +816,7 @@ export function BinderDocuments({
                             setMoving({ subject: subjectOf(node), label })
                           }
                         >
-                          <FolderInput
-                            size={14}
-                            strokeWidth={1.6}
-                            aria-hidden="true"
-                          />
+                          <AppIcon icon={ICON.moveToFolder} size="sm" />
                         </button>
                         {/* **Documents only.** Archiving a folder would mean
                             archiving everything in it, which is a different and
@@ -801,11 +833,7 @@ export function BinderDocuments({
                             disabled={committing}
                             onClick={() => void archiveDocument(node)}
                           >
-                            <Archive
-                              size={14}
-                              strokeWidth={1.6}
-                              aria-hidden="true"
-                            />
+                            <AppIcon icon={ICON.archive} size="sm" />
                           </button>
                         ) : null}
                       </>
@@ -856,11 +884,11 @@ export function BinderDocuments({
               onClick={() => setArchiveOpen((open) => !open)}
             >
               {archiveOpen ? (
-                <ChevronDown size={14} strokeWidth={1.6} aria-hidden="true" />
+                <AppIcon icon={ICON.chevronDown} size="sm" />
               ) : (
-                <ChevronRight size={14} strokeWidth={1.6} aria-hidden="true" />
+                <AppIcon icon={ICON.chevronRight} size="sm" />
               )}
-              <Archive size={14} strokeWidth={1.5} aria-hidden="true" />
+              <AppIcon icon={ICON.archive} size="sm" />
               {archivedCount === 1
                 ? "Archived · 1 document"
                 : `Archived · ${archivedCount} documents`}
@@ -876,7 +904,7 @@ export function BinderDocuments({
                     <span className="binder-tree-main binder-tree-main--inert">
                       <span className="binder-tree-twisty" aria-hidden="true" />
                       <span className="binder-tree-icon" aria-hidden="true">
-                        <FileText size={16} strokeWidth={1.4} />
+                        <AppIcon icon={ICON.document} size="md" />
                       </span>
                       <span className="binder-tree-label">{entry.title}</span>
                     </span>
@@ -918,7 +946,7 @@ export function BinderDocuments({
               className="bs-btn bs-btn--sm bs-btn--quiet binder-archive-link"
               onClick={onOpenArchive}
             >
-              <Archive size={14} strokeWidth={1.5} aria-hidden="true" />
+              <AppIcon icon={ICON.archive} size="sm" />
               {archivedCount === 1
                 ? "1 archived document"
                 : `${archivedCount} archived documents`}
@@ -944,6 +972,24 @@ export function BinderDocuments({
 const EVERYTHING_OPEN = () => true;
 
 /** The same row, for marking what is currently in the air. */
+/** What a tree holds inside one folder, as a list of its own; empty if it is not there. */
+export function childrenOfFolder(
+  nodes: readonly BinderTreeNode[],
+  folder: string,
+): BinderTreeNode[] {
+  let level: readonly BinderTreeNode[] = nodes;
+  const parts = folder.split("/").filter(Boolean);
+  for (let depth = 1; depth <= parts.length; depth += 1) {
+    const path = parts.slice(0, depth).join("/");
+    const next = level.find(
+      (node) => node.kind === "folder" && node.path === path,
+    );
+    if (!next || next.kind !== "folder") return [];
+    level = next.children;
+  }
+  return [...level];
+}
+
 function sameNode(left: DragSubject, right: DragSubject): boolean {
   if (left.kind !== right.kind) return false;
   return left.kind === "folder"

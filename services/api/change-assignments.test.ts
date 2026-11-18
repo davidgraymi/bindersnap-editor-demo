@@ -5,7 +5,9 @@ import {
   buildChangeReviewers,
   countApprovals,
   planReviewerChanges,
+  mayEditChange,
   readAssignee,
+  readCoEditors,
   readRequestedReviewers,
 } from "./change-assignments";
 import type { components } from "./gitea-client/spec/gitea";
@@ -253,4 +255,30 @@ test("a stale approval counts only where the binder lets approvals stand", () =>
     ignoresStale: false,
   });
   expect(reviewers.find((r) => r.login === "dana")?.stale).toBe(false);
+});
+
+test("a change's co-editors are its assignees, without its author", () => {
+  const pull = {
+    user: user("carol", "Carol Mendes"),
+    assignees: [
+      user("carol", "Carol Mendes"),
+      user("bob", "Bob Okafor"),
+      user("Bob", "Bob Okafor"),
+    ],
+  } as PullRequest;
+  expect(readCoEditors(pull).map((editor) => editor.login)).toEqual(["bob"]);
+  expect(readCoEditors({ user: user("carol", "") } as PullRequest)).toEqual([]);
+});
+
+test("its author and its co-editors may edit a change, and nobody else", () => {
+  const pull = {
+    user: user("carol", "Carol Mendes"),
+    assignees: [user("bob", "Bob Okafor")],
+  } as PullRequest;
+  expect(mayEditChange(pull, "carol")).toBe(true);
+  expect(mayEditChange(pull, "Carol")).toBe(true);
+  expect(mayEditChange(pull, "bob")).toBe(true);
+  // A binder admin with every access there is still did not write this.
+  expect(mayEditChange(pull, "alice")).toBe(false);
+  expect(mayEditChange(pull, "")).toBe(false);
 });

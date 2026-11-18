@@ -1,8 +1,8 @@
-import { ArrowRight, BookOpen, Check } from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 
 import type { OnboardingPayload } from "../api";
 import { doneCount, nextStep, STEP_COPY } from "../onboardingSteps";
-import { AppIcon } from "./AppIcon";
+
 import { siteUrl } from "../siteLink";
 
 /**
@@ -66,7 +66,11 @@ export function GettingStarted({
               className={`guide-step${step.done ? " guide-step--done" : ""}${current ? " guide-step--current" : ""}`}
             >
               <span className="guide-step-mark" aria-hidden="true">
-                {step.done ? <AppIcon icon={Check} size="sm" /> : index + 1}
+                {step.done ? (
+                  <AppIcon icon={ICON.selected} size="sm" />
+                ) : (
+                  index + 1
+                )}
               </span>
               <span className="guide-step-body">
                 <span className="guide-step-title">
@@ -88,7 +92,7 @@ export function GettingStarted({
                         }}
                       >
                         {copy.action}
-                        <AppIcon icon={ArrowRight} size="sm" />
+                        <AppIcon icon={ICON.forward} size="sm" />
                       </a>
                     ) : null}
                     <a
@@ -98,7 +102,7 @@ export function GettingStarted({
                       rel="noopener"
                       title="Opens in a new tab"
                     >
-                      <AppIcon icon={BookOpen} size="sm" />
+                      <AppIcon icon={ICON.guide} size="sm" />
                       How this works
                     </a>
                   </span>

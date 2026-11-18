@@ -26,6 +26,14 @@ type Comment = components["schemas"]["Comment"];
  *
  * The marker is invisible once Gitea renders the comment as markdown.
  *
+ * **A thread can be about a passage.** A reviewer selects words in a
+ * document and comments on them, so the root's marker may carry
+ * `anchor=<base64url JSON>`: which document, the words selected, and a few
+ * words either side to find them again (a text-quote anchor, not a line
+ * number — a policy has no lines). It is part of the comment, so it is in
+ * Gitea with it, and it is never edited: if the passage is later rewritten
+ * the thread still says what it was about.
+ *
  * Resolution is an **append-only event log**, not a mutation: resolving a
  * thread posts a new `kind=resolve` comment rather than editing the root.
  * Current state is derived by replaying that log in chronological order: a
@@ -85,6 +93,64 @@ export interface DiscussionResolutionEvent {
 
 export type DiscussionOrigin = "bindersnap" | "external";
 
+/**
+ * The passage a thread is about: which document, the words, and what stood
+ * either side of them when they were chosen.
+ */
+export interface DiscussionAnchor {
+  /** The document's identity (ADR 0005), or its path when it has none. */
+  document: string;
+  /** What the document was called, for a reader who cannot open it. */
+  label: string;
+  quote: string;
+  prefix: string;
+  suffix: string;
+}
+
+export const ANCHOR_LIMITS = {
+  document: 300,
+  label: 200,
+  quote: 600,
+  context: 80,
+} as const;
+
+/**
+ * Read an anchor from untrusted input: a request body, or a marker somebody
+ * may have written by hand. Anything that is not a plain, bounded anchor is
+ * no anchor — the comment still stands as a comment on the change.
+ */
+export function readAnchor(value: unknown): DiscussionAnchor | null {
+  if (!value || typeof value !== "object") return null;
+  const raw = value as Record<string, unknown>;
+  const text = (key: string, limit: number): string | null => {
+    const entry = raw[key];
+    return typeof entry === "string" && entry.length <= limit ? entry : null;
+  };
+  const document = text("document", ANCHOR_LIMITS.document);
+  const quote = text("quote", ANCHOR_LIMITS.quote);
+  const label = text("label", ANCHOR_LIMITS.label) ?? "";
+  const prefix = text("prefix", ANCHOR_LIMITS.context) ?? "";
+  const suffix = text("suffix", ANCHOR_LIMITS.context) ?? "";
+  if (!document || !quote || quote.trim() === "") return null;
+  return { document, label, quote, prefix, suffix };
+}
+
+/** base64url, so the marker's value has no space and can never hold `-->`. */
+export function encodeAnchor(anchor: DiscussionAnchor): string {
+  return Buffer.from(JSON.stringify(anchor), "utf8").toString("base64url");
+}
+
+export function decodeAnchor(encoded: string): DiscussionAnchor | null {
+  if (!/^[A-Za-z0-9_-]{1,4096}$/.test(encoded)) return null;
+  try {
+    return readAnchor(
+      JSON.parse(Buffer.from(encoded, "base64url").toString("utf8")),
+    );
+  } catch {
+    return null;
+  }
+}
+
 export interface DiscussionThread {
   id: string;
   /**
@@ -100,6 +166,8 @@ export interface DiscussionThread {
   resolvedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  /** The passage it is about, or null for a comment on the whole change. */
+  anchor: DiscussionAnchor | null;
 }
 
 export interface DiscussionSummary {
@@ -125,6 +193,8 @@ export interface ListDiscussionsParams {
 
 export interface CreateDiscussionThreadParams extends ListDiscussionsParams {
   body: string;
+  /** The passage the comment is about, already read with `readAnchor`. */
+  anchor?: DiscussionAnchor | null;
 }
 
 export interface ReplyToDiscussionParams extends ListDiscussionsParams {
@@ -187,6 +257,7 @@ interface ParsedMarker {
   kind: DiscussionEventKind;
   threadId: string;
   state?: string;
+  anchor: DiscussionAnchor | null;
 }
 
 /**
@@ -226,7 +297,14 @@ export function parseMarker(body: string): ParsedMarker | null {
     return null;
   }
 
-  return { kind, threadId, state: attrs.state };
+  return {
+    kind,
+    threadId,
+    state: attrs.state,
+    // Only a thread's root says what it is about.
+    anchor:
+      kind === "thread" && attrs.anchor ? decodeAnchor(attrs.anchor) : null,
+  };
 }
 
 /** Remove every bindersnap marker so the body renders as the user wrote it. */
@@ -287,6 +365,7 @@ export function buildThreads(comments: Comment[]): DiscussionThread[] {
         resolvedAt: null,
         createdAt,
         updatedAt: createdAt,
+        anchor: null,
       };
       threads.set(id, thread);
     }
@@ -318,6 +397,10 @@ export function buildThreads(comments: Comment[]): DiscussionThread[] {
       thread.resolvedAt = resolved ? createdAt : null;
       thread.updatedAt = createdAt || thread.updatedAt;
       continue;
+    }
+
+    if (marker?.kind === "thread" && marker.anchor && !thread.anchor) {
+      thread.anchor = marker.anchor;
     }
 
     thread.comments.push({
@@ -490,8 +573,16 @@ export async function setCommentReactionInThread(
 export async function createDiscussionThread(
   params: CreateDiscussionThreadParams,
 ): Promise<DiscussionSummary> {
-  const { client, owner, repo, pullNumber, body, viewerLogin, withReactions } =
-    params;
+  const {
+    client,
+    owner,
+    repo,
+    pullNumber,
+    body,
+    anchor,
+    viewerLogin,
+    withReactions,
+  } = params;
 
   if (stripForgedMarkers(body).trim() === "") {
     throw new GiteaApiError(0, "A comment body is required.");
@@ -503,7 +594,12 @@ export async function createDiscussionThread(
     owner,
     repo,
     pullNumber,
-    composeBody(body, "thread", threadId),
+    composeBody(
+      body,
+      "thread",
+      threadId,
+      anchor ? { anchor: encodeAnchor(anchor) } : undefined,
+    ),
   );
 
   return listDiscussions({

@@ -12,7 +12,7 @@ import {
 } from "react";
 import type { Editor, JSONContent } from "@tiptap/core";
 import type { EditorState } from "@tiptap/pm/state";
-import { GitPullRequest, History, Pencil } from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 
 import type {
   BinderArchivePayload,
@@ -32,6 +32,8 @@ import {
 } from "../data/queries";
 import { formatAge, formatDocumentName } from "../documentDisplay";
 import { parseEditorDocument } from "../editorDocumentHtml";
+import { usePageTitle } from "../pageTitle";
+import { HelpLink } from "./HelpLink";
 import {
   createDocumentState,
   showDocumentState,
@@ -49,6 +51,12 @@ import type { DragSubject } from "../binderMove";
 import { BinderDraftPicker } from "./BinderDraftPicker";
 import { InlineRename } from "./BinderPage";
 import { readDroppedFiles, type DroppedFiles } from "../bulkUpload";
+import { ReviseDocumentModal } from "./ReviseDocumentModal";
+import { EditorFolderDesk } from "./EditorFolderDesk";
+import { EditorSignOffSide } from "./EditorSignOffSide";
+import type { SignOffPlace } from "../signOffPanel";
+import { routeToPath } from "../routes";
+import { buildBinderUrl } from "../binderShell";
 import {
   DraftFiles,
   type ArchiveUndo,
@@ -107,6 +115,13 @@ interface DocumentEditorPageProps {
   org: string;
   binder: string;
   documentPath: string;
+  /**
+   * A folder on the desk instead of a document (4.5): "" is the binder's top
+   * folder. While it is set, `documentPath` is ignored.
+   */
+  folder?: string | null;
+  /** Put a folder on the desk: a folder's name in the file panel, an origin. */
+  onOpenFolder?: (folder: string) => void;
   /** The draft to read from and save into. Null while the shell finds it. */
   draft: string | null;
   /** What the draft is called, to say where Save puts things. */
@@ -142,6 +157,9 @@ interface DocumentEditorPageProps {
    * this policy when dropped on the page.
    */
   onUploadFiles?: (files: DroppedFiles, folder?: string) => void;
+  /** Open the add dialog to upload files into a folder. */
+  onUpload?: (folder: string) => void;
+
   /** Your drafts in this binder, for the picker in the title bar. */
   drafts: BinderDraftPayload | null;
   /** A draft is being started or renamed. */
@@ -214,7 +232,9 @@ type LoadState =
    * bytes, already read, for the desk to show it as it is.
    */
   | { kind: "foreign"; detail: WorkspaceDocumentDetailPayload; file: Blob }
-  | { kind: "ready"; detail: WorkspaceDocumentDetailPayload; doc: JSONContent };
+  | { kind: "ready"; detail: WorkspaceDocumentDetailPayload; doc: JSONContent }
+  /** A folder on the desk, where a document's page goes. */
+  | { kind: "folder"; folder: string };
 
 type SaveState =
   | { kind: "idle" }
@@ -279,6 +299,8 @@ export function DocumentEditorPage({
   org,
   binder,
   documentPath,
+  folder = null,
+  onOpenFolder,
   draft,
   draftName,
   onClose,
@@ -288,6 +310,7 @@ export function DocumentEditorPage({
   onOpenDocument,
   onNewDocument,
   onUploadFiles,
+  onUpload,
   drafts,
   draftBusy = false,
   onSwitchDraft,
@@ -312,10 +335,33 @@ export function DocumentEditorPage({
    * Save, then let every read of this binder know: the document page, the
    * tree and the contents beside the editor were all read before these words.
    */
-  const saveRevision = async (
+  /**
+   * **What each open policy was written on**, by identity: the file's blob
+   * SHA as it was read, then as each save of ours left it. Sent with every
+   * save, so one made on top of a co-editor's save we never saw is refused
+   * instead of quietly replacing their words.
+   */
+  const writtenOn = useRef(new Map<string, string>());
+  /**
+   * One save at a time, each after the last: a second save sent while the
+   * first is in flight would name the version the first replaces, and be
+   * refused as if somebody else had saved.
+   */
+  const saveQueue = useRef<Promise<unknown>>(Promise.resolve());
+  const saveRevision = (
+    detail: WorkspaceDocumentDetailPayload,
+    ...args: Parameters<typeof reviseBinderDocument>
+  ): ReturnType<typeof reviseBinderDocument> => {
+    const run = saveQueue.current.then(() => sendSave(detail, ...args));
+    saveQueue.current = run.catch(() => undefined);
+    return run;
+  };
+  const sendSave = async (
+    detail: WorkspaceDocumentDetailPayload,
     ...args: Parameters<typeof reviseBinderDocument>
   ): ReturnType<typeof reviseBinderDocument> => {
     const [org_, binder_, file, path, target, source] = args;
+    const key = openKey(detail);
     const saved = await reviseBinderDocument(
       org_,
       binder_,
@@ -323,11 +369,15 @@ export function DocumentEditorPage({
       path,
       target,
       source,
-      // Saved on its own into an unproposed draft: the server may fold it
-      // into the last save of the same policy, so the draft lists "Edit
-      // Hand Hygiene" once rather than once per pause in the typing.
-      { fold: autosaveRef.current },
+      {
+        // Saved on its own into an unproposed draft: the server may fold it
+        // into the last save of the same policy, so the draft lists "Edit
+        // Hand Hygiene" once rather than once per pause in the typing.
+        fold: autosaveRef.current,
+        basedOn: writtenOn.current.get(key) ?? detail.document.sha,
+      },
     );
+    if (saved.sha) writtenOn.current.set(key, saved.sha);
     void queryClient.invalidateQueries({
       queryKey: queryKeys.binder(org, binder),
     });
@@ -355,6 +405,13 @@ export function DocumentEditorPage({
   const [save, setSave] = useState<SaveState>({ kind: "idle" });
   const savingRef = useRef(false);
   savingRef.current = save.kind === "saving";
+  /**
+   * An act in the file panel is committing to the draft. A save and an act
+   * both move the draft's branch, and Gitea refuses whichever lands second
+   * ("cannot lock ref"), so they take turns: an act waits for a save in
+   * flight, and a save that comes due during an act waits for it.
+   */
+  const actingRef = useRef(false);
   const [dirty, setDirty] = useState(false);
   const [leaving, setLeaving] = useState<Leaving | null>(null);
   const editorRef = useRef<Editor | null>(null);
@@ -514,6 +571,17 @@ export function DocumentEditorPage({
   const listedPath =
     files?.documents.find((entry) => entry.slugPath === documentPath)?.path ??
     null;
+  /**
+   * Bumped after Upload new version on a file shown as it is. The file under
+   * the address changed but the address did not, so nothing else would read
+   * it again.
+   */
+  const [fileNonce, setFileNonce] = useState(0);
+  const [uploadingVersion, setUploadingVersion] = useState<{
+    slugPath: string;
+    name: string;
+    currentVersion: number | null;
+  } | null>(null);
   const coverStale =
     load.kind === "foreign" &&
     listedPath !== null &&
@@ -544,6 +612,17 @@ export function DocumentEditorPage({
     // were words kept on this device from last time.
     setSave({ kind: "idle" });
     setRecovered(null);
+
+    // **A folder on the desk.** Nothing to read but its list, which the desk
+    // reads itself; the open documents keep their words for when one opens
+    // again.
+    if (folder !== null) {
+      shownKey.current = null;
+      setDirty(false);
+      setLoad({ kind: "folder", folder });
+      recountElsewhere();
+      return;
+    }
 
     // Open already: back at once, words and all, and its details read again
     // quietly — an act in the panel may have renamed or moved it since.
@@ -655,7 +734,16 @@ export function DocumentEditorPage({
     // `recountElsewhere` is stable; `isUnsaved` reads only its argument;
     // `readPolicy` changes only with the draft, which is in the list.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [org, binder, documentPath, draft, changeNumber, coverStale]);
+  }, [
+    org,
+    binder,
+    documentPath,
+    folder,
+    draft,
+    changeNumber,
+    coverStale,
+    fileNonce,
+  ]);
 
   // "Saved 3 minutes ago" has to keep counting while nobody types.
   useEffect(() => {
@@ -743,6 +831,7 @@ export function DocumentEditorPage({
         ? opened.current.get(shownKey.current)
         : undefined;
       await saveRevision(
+        shown?.detail ?? load.detail,
         org,
         binder,
         file,
@@ -804,6 +893,7 @@ export function DocumentEditorPage({
       const json = JSON.stringify(policy.doc);
       try {
         await saveRevision(
+          policy.detail,
           org,
           binder,
           new File([JSON.stringify(policy.doc, null, 2)], "document.json", {
@@ -859,6 +949,7 @@ export function DocumentEditorPage({
     if (!policy || !isUnsaved(policy) || !draft) return true;
     try {
       await saveRevision(
+        policy.detail,
         org,
         binder,
         new File([JSON.stringify(policy.doc, null, 2)], "document.json", {
@@ -876,6 +967,9 @@ export function DocumentEditorPage({
       return false;
     }
   };
+  /** The latest render's {@link saveOne}, for an act that waited on a save. */
+  const saveOneRef = useRef(saveOne);
+  saveOneRef.current = saveOne;
 
   /**
    * Saving on its own: after the words have rested, and never later than
@@ -893,7 +987,7 @@ export function DocumentEditorPage({
   const runAutosave = useCallback(() => {
     window.clearTimeout(autosaveTimer.current);
     if (!autosaveRef.current) return;
-    if (savingRef.current) {
+    if (savingRef.current || actingRef.current) {
       autosaveTimer.current = window.setTimeout(runAutosave, 500);
       return;
     }
@@ -1043,17 +1137,25 @@ export function DocumentEditorPage({
     act: () => Promise<void>,
     failed: string,
   ): Promise<boolean> => {
-    if (filesBusy) return false;
+    if (filesBusy || actingRef.current) return false;
     setFilesError(null);
-    if (savesFirst !== null && !(await saveOne(savesFirst))) return false;
+    actingRef.current = true;
     setFilesBusy(true);
     try {
+      // A save already on its way moves the draft first; the act goes after.
+      while (savingRef.current) {
+        await new Promise((resolve) => window.setTimeout(resolve, 150));
+      }
+      if (savesFirst !== null && !(await saveOneRef.current(savesFirst))) {
+        return false;
+      }
       await act();
       return true;
     } catch (err) {
       setFilesError(errorMessage(err, failed));
       return false;
     } finally {
+      actingRef.current = false;
       setFilesBusy(false);
     }
   };
@@ -1087,19 +1189,17 @@ export function DocumentEditorPage({
   // The name the address gives, until the document itself has been read, so
   // the title bar does not blink out between one policy and the next.
   const name =
-    load.kind === "ready" || load.kind === "foreign"
-      ? formatDocumentName(load.detail.document.name)
-      : formatDocumentName(documentPath.split("/").pop() ?? documentPath);
+    folder !== null
+      ? folder === ""
+        ? binderName
+        : formatDocumentName(folder.slice(folder.lastIndexOf("/") + 1))
+      : load.kind === "ready" || load.kind === "foreign"
+        ? formatDocumentName(load.detail.document.name)
+        : formatDocumentName(documentPath.split("/").pop() ?? documentPath);
 
   // The browser tab says which policy is open, and — as Word's title bar
   // does — when it has changes not saved yet.
-  useEffect(() => {
-    const was = document.title;
-    document.title = `${dirty && !autosave ? "• " : ""}${name} · Bindersnap`;
-    return () => {
-      document.title = was;
-    };
-  }, [autosave, dirty, name]);
+  usePageTitle([name, binderName], dirty && !autosave ? "• " : "");
 
   // Saving on its own, words typed are words on their way: "Saving…" from
   // the first key, as a word processor online says it.
@@ -1132,13 +1232,20 @@ export function DocumentEditorPage({
   // the next one in (`documentState.ts`). A Word file or a PDF is shown in
   // the same editor, on the desk in place of the page, so moving to one and
   // back never leaves it either.
-  type Shown = Extract<LoadState, { kind: "ready" } | { kind: "foreign" }>;
+  type Shown = Extract<
+    LoadState,
+    { kind: "ready" } | { kind: "foreign" } | { kind: "folder" }
+  >;
   const lastShown = useRef<Shown | null>(null);
-  if (load.kind === "ready" || load.kind === "foreign") {
+  if (
+    load.kind === "ready" ||
+    load.kind === "foreign" ||
+    load.kind === "folder"
+  ) {
     lastShown.current = load;
   } else if (load.kind !== "loading") lastShown.current = null;
   const frame: Shown | null =
-    load.kind === "ready" || load.kind === "foreign"
+    load.kind === "ready" || load.kind === "foreign" || load.kind === "folder"
       ? load
       : load.kind === "loading"
         ? lastShown.current
@@ -1207,11 +1314,14 @@ export function DocumentEditorPage({
           unsavedElsewhere={unsavedElsewhere}
           onReadAhead={readAheadOf}
           onOpen={(slugPath) => leave({ kind: "open", slugPath })}
+          {...(onOpenFolder ? { onOpenFolder } : {})}
+          activeFolder={folder}
           // A change request is revised, not added to or reshaped, here.
           onNew={
             change ? undefined : (folder) => leave({ kind: "new", folder })
           }
           onNewFolder={change ? undefined : onNewFolder}
+          onUpload={change ? undefined : onUpload}
           onUploadDrop={
             change || !onUploadFiles
               ? undefined
@@ -1298,6 +1408,47 @@ export function DocumentEditorPage({
       )
     : undefined;
 
+  /**
+   * "Who signs off here", on the right (D16): for the folder on the desk, or
+   * the document open. Read at the draft and edited there. Not on a change
+   * request edited in place — rules are changed in a draft.
+   */
+  const signOffPlace: SignOffPlace | null =
+    frame?.kind === "folder"
+      ? frame.folder === ""
+        ? { kind: "binder" }
+        : { kind: "folder", path: frame.folder }
+      : frame
+        ? { kind: "document", path: frame.detail.document.path }
+        : null;
+  const signOffSide =
+    draft && signOffPlace ? (
+      <EditorSignOffSide
+        org={org}
+        binder={binder}
+        binderName={binderName}
+        draft={draft}
+        place={signOffPlace}
+        canEdit={!change}
+        onNavigate={(route) => {
+          window.history.pushState({}, "", routeToPath(route));
+          window.dispatchEvent(new PopStateEvent("popstate"));
+        }}
+        onOpenOrigin={(origin) =>
+          onOpenFolder?.(origin.kind === "folder" ? origin.path : "")
+        }
+        originHref={(origin) =>
+          buildBinderUrl({
+            org,
+            binder,
+            folder: origin.kind === "folder" ? origin.path : null,
+            edit: "writing",
+            draft,
+          })
+        }
+      />
+    ) : null;
+
   let body: ReactNode;
   /** Whether `body` is the editor, which then holds the file panel. */
   let inEditor = false;
@@ -1336,7 +1487,17 @@ export function DocumentEditorPage({
         >
           <DocumentEditor
             label={name}
-            aside={filesPanel}
+            aside={(outline: OutlineSlot) => (
+              <>
+                {filesPanel?.(outline)}
+                {signOffSide}
+              </>
+            )}
+            statusStart={
+              frame.kind === "folder" ? (
+                <span className="doc-editor-status-kind">Folder</span>
+              ) : undefined
+            }
             // A file from the computer dropped on the page is a document to
             // add, not something to open in the browser. Pictures still go
             // into the page, where they were dropped.
@@ -1358,7 +1519,36 @@ export function DocumentEditorPage({
             initialContent={frameDoc}
             editable={load.kind === "ready"}
             cover={
-              frame.kind === "foreign" ? (
+              frame.kind === "folder" ? (
+                <EditorFolderDesk
+                  key={`folder:${frame.folder}`}
+                  org={org}
+                  binder={binder}
+                  binderName={binderName}
+                  folder={frame.folder}
+                  draft={draft}
+                  documentCount={
+                    files
+                      ? files.documents.filter(
+                          (entry) =>
+                            frame.folder === "" ||
+                            entry.path.startsWith(`${frame.folder}/`),
+                        ).length
+                      : null
+                  }
+                  {...(change || !onUpload ? {} : { onUpload })}
+                  {...(change
+                    ? {}
+                    : {
+                        onNew: (into: string) =>
+                          leave({ kind: "new", folder: into }),
+                      })}
+                  onOpenDocument={(slugPath) =>
+                    leave({ kind: "open", slugPath })
+                  }
+                  onOpenFolder={(path) => onOpenFolder?.(path)}
+                />
+              ) : frame.kind === "foreign" ? (
                 <EditorFileCover
                   // A new file is a new preview, not the last one reread.
                   key={frame.detail.document.path}
@@ -1366,6 +1556,17 @@ export function DocumentEditorPage({
                   file={frame.file}
                   // Not on a change request: the conversion goes into a
                   // draft, and this is somebody's change, saved into in place.
+                  onUploadVersion={
+                    !change && draft
+                      ? () =>
+                          setUploadingVersion({
+                            slugPath: frame.detail.document.slugPath,
+                            name: frame.detail.document.name,
+                            currentVersion:
+                              frame.detail.latestVersion?.version ?? null,
+                          })
+                      : undefined
+                  }
                   onConvert={
                     !change &&
                     convertibleKind(frame.detail.document.path) !== null
@@ -1515,7 +1716,7 @@ export function DocumentEditorPage({
                 onClick={() => setTitling(true)}
               >
                 <span className="doc-editor-title-text">{name}</span>
-                <Pencil size={13} strokeWidth={1.75} aria-hidden="true" />
+                <AppIcon icon={ICON.edit} size="sm" />
               </button>
             ) : (
               name
@@ -1532,7 +1733,7 @@ export function DocumentEditorPage({
               className="doc-editor-change"
               title={`${change.title} — its reviewers see every save. The version on record does not change until the change is published.`}
             >
-              <GitPullRequest size={14} strokeWidth={1.75} aria-hidden="true" />
+              <AppIcon icon={ICON.changeRequest} size="sm" />
               Change {change.number}
             </span>
           ) : drafts && current ? (
@@ -1567,6 +1768,11 @@ export function DocumentEditorPage({
           </span>
         </div>
         <div className="doc-editor-head-actions">
+          {/* The editor is full page, with no sidebar, so this is the way
+              to help from here. */}
+          <HelpLink guide="writing" iconOnly>
+            Help with writing and editing
+          </HelpLink>
           <button
             type="button"
             className="bs-btn bs-btn-secondary bs-btn--sm"
@@ -1625,7 +1831,7 @@ export function DocumentEditorPage({
                 leave({ kind: "change", number: current.changeNumber! })
               }
             >
-              <GitPullRequest size={14} strokeWidth={1.75} aria-hidden="true" />
+              <AppIcon icon={ICON.changeRequest} size="sm" />
               Change {current.changeNumber}
             </button>
           ) : (
@@ -1648,7 +1854,7 @@ export function DocumentEditorPage({
 
       {recovered && load.kind === "ready" ? (
         <div className="doc-editor-recover" role="status">
-          <History size={15} strokeWidth={1.75} aria-hidden="true" />
+          <AppIcon icon={ICON.history} size="md" />
           <p>
             <strong>Unsaved changes from {formatAge(recovered.at)}</strong> were
             kept on this device.
@@ -1837,6 +2043,29 @@ export function DocumentEditorPage({
             </div>
           </div>
         </div>
+      ) : null}
+
+      {/* Upload new version, from the note over a Word file or PDF: into
+          this draft, like everything else done here. */}
+      {uploadingVersion && draft ? (
+        <ReviseDocumentModal
+          org={org}
+          binder={binder}
+          slugPath={uploadingVersion.slugPath}
+          name={uploadingVersion.name}
+          currentVersion={uploadingVersion.currentVersion}
+          draft={draft}
+          onClose={() => setUploadingVersion(null)}
+          onProposed={() => setUploadingVersion(null)}
+          onSaved={() => {
+            setUploadingVersion(null);
+            readAhead.current.clear();
+            void queryClient.invalidateQueries({
+              queryKey: queryKeys.binder(org, binder),
+            });
+            setFileNonce((n) => n + 1);
+          }}
+        />
       ) : null}
     </div>
   );

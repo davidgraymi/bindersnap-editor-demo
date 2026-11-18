@@ -1,12 +1,5 @@
 import { useState } from "react";
-import {
-  BookCheck,
-  Check,
-  ChevronDown,
-  GitPullRequestArrow,
-  Pencil,
-  Plus,
-} from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 
 import type {
   BinderDraftPayload,
@@ -14,7 +7,7 @@ import type {
 } from "../../../packages/api-schema/schemas/workspaces";
 import { formatAge } from "../documentDisplay";
 import { nameFor, usePeopleNames } from "../usePeopleNames";
-import { AppIcon } from "./AppIcon";
+
 import { PersonAvatar } from "./PersonAvatar";
 import { useFloatingMenu } from "./useFloatingMenu";
 
@@ -143,7 +136,7 @@ export function BinderDraftPicker({
     return (
       <div className={`bs-row${on ? " bs-row--on" : ""}`} key={draft.branch}>
         <span className="bs-row-icon" aria-hidden="true">
-          {on ? <AppIcon icon={Check} size="sm" /> : null}
+          {on ? <AppIcon icon={ICON.selected} size="sm" /> : null}
         </span>
 
         {renaming ? (
@@ -196,7 +189,7 @@ export function BinderDraftPicker({
                   })
                 }
               >
-                <AppIcon icon={Pencil} size="sm" />
+                <AppIcon icon={ICON.edit} size="sm" />
               </button>
             </span>
           </>
@@ -220,7 +213,7 @@ export function BinderDraftPicker({
         }}
       >
         <AppIcon
-          icon={current === null ? BookCheck : GitPullRequestArrow}
+          icon={current === null ? ICON.onRecord : ICON.draft}
           size="sm"
         />
         <span className="bs-draftpick-name">
@@ -229,7 +222,7 @@ export function BinderDraftPicker({
         {mine && mine.actCount > 0 ? (
           <span className="bs-draftpick-count">· {countInDraft(mine)}</span>
         ) : null}
-        <AppIcon icon={ChevronDown} size="sm" />
+        <AppIcon icon={ICON.chevronDown} size="sm" />
       </button>
 
       {open ? (
@@ -237,7 +230,9 @@ export function BinderDraftPicker({
           {onRecord ? (
             <div className={`bs-row${current === null ? " bs-row--on" : ""}`}>
               <span className="bs-row-icon" aria-hidden="true">
-                {current === null ? <AppIcon icon={Check} size="sm" /> : null}
+                {current === null ? (
+                  <AppIcon icon={ICON.selected} size="sm" />
+                ) : null}
               </span>
               <button
                 type="button"
@@ -347,7 +342,7 @@ export function BinderDraftPicker({
                   setNaming({ kind: "new", branch: "", value: "" })
                 }
               >
-                <AppIcon icon={Plus} size="sm" />
+                <AppIcon icon={ICON.add} size="sm" />
                 {drafts.length === 0 ? "Start a draft" : "Start another draft"}
               </button>
             )}

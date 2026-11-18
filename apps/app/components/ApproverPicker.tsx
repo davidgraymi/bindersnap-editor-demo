@@ -1,9 +1,9 @@
 import { useRef, useState } from "react";
-import { Users } from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 
 import { describeGroupName } from "../../../packages/utils/groupName";
 import { searchApprovers, type approverOptions } from "../binderSettings";
-import { AppIcon } from "./AppIcon";
+
 import { FloatingResults } from "./FloatingResults";
 import { PersonAvatar } from "./PersonAvatar";
 import { RemoveButton } from "./RemoveButton";
@@ -60,7 +60,7 @@ export function ApproverPicker({
           {groups.map((group) => (
             <li className="bs-row" key={`group:${group}`}>
               <span className="bs-row-icon">
-                <AppIcon icon={Users} size="sm" />
+                <AppIcon icon={ICON.people} size="sm" />
               </span>
               <span className="bs-row-body">
                 <span className="bs-row-name">{groupName(group)}</span>
@@ -153,7 +153,7 @@ export function ApproverPicker({
                     }}
                   >
                     {match.kind === "group" ? (
-                      <AppIcon icon={Users} size="sm" />
+                      <AppIcon icon={ICON.people} size="sm" />
                     ) : (
                       <PersonAvatar
                         person={{ login: match.login, fullName: match.label }}

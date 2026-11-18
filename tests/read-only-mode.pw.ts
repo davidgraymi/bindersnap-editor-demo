@@ -178,7 +178,7 @@ test("a delinquent organization keeps its record, and its controls open the payw
   // Before: a member in good standing is offered the way to write.
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
   await expect(
-    page.getByRole("button", { name: "Add a document" }),
+    page.getByRole("button", { name: "Edit", exact: true }),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "Create new…" })).toBeVisible();
   await expect(page.getByTestId("read-only-banner")).toHaveCount(0);
@@ -201,7 +201,7 @@ test("a delinquent organization keeps its record, and its controls open the payw
   // reader exactly where they were.
   const paywall = page.getByRole("dialog");
   for (const open of [
-    () => page.getByRole("button", { name: "Add a document" }).click(),
+    () => page.getByRole("button", { name: "Edit", exact: true }).click(),
     async () => {
       await page.getByRole("button", { name: "Create new…" }).click();
       await page.getByRole("menuitem", { name: /New binder/ }).click();

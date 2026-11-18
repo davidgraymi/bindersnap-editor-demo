@@ -1,16 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import {
-  AlertTriangle,
-  Building2,
-  FileText,
-  Folder,
-  Library,
-  Pencil,
-  Plus,
-  ShieldCheck,
-  Users,
-} from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 import { useIsReadOnly } from "../readOnlyContext";
 import { useOrganizationDisplayName } from "../useOrganizationDisplayName";
 
@@ -19,7 +9,6 @@ import {
   describeBinder,
   fetchBinderPeople,
   grantBinderGroup,
-  proposeBinderSignOff,
   removeBinderPerson,
   renameBinder,
   revokeBinderGroup,
@@ -67,8 +56,11 @@ import { ApproverPicker } from "./ApproverPicker";
 import { FloatingResults } from "./FloatingResults";
 import { RemoveButton } from "./RemoveButton";
 import { formatDocumentName } from "../documentDisplay";
+import { GroupLink } from "./GroupLink";
+import { routeToPath, type AppRoute } from "../routes";
+import { followInApp } from "../appLink";
 import { describeGroupName } from "../../../packages/utils/groupName";
-import { AppIcon } from "./AppIcon";
+
 import { PersonAvatar } from "./PersonAvatar";
 import { SettingsGroup } from "./SettingsGroup";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
@@ -613,7 +605,7 @@ function AccessTab({
         <ul className="bs-row-list">
           <li className="bs-row">
             <span className="bs-row-icon">
-              <AppIcon icon={Building2} size="md" />
+              <AppIcon icon={ICON.organization} size="md" />
             </span>
             <span className="bs-row-body">
               <label className="bs-row-name" htmlFor="binder-open">
@@ -663,10 +655,19 @@ function AccessTab({
               return (
                 <li className="bs-row" key={`group:${group.id}`}>
                   <span className="bs-row-icon">
-                    <AppIcon icon={Users} size="md" />
+                    <AppIcon icon={ICON.people} size="md" />
                   </span>
                   <span className="bs-row-body">
-                    <span className="bs-row-name">{name}</span>
+                    <span className="bs-row-name">
+                      <GroupLink
+                        org={org}
+                        group={group.name}
+                        onNavigate={(route) => {
+                          window.history.pushState({}, "", routeToPath(route));
+                          window.dispatchEvent(new PopStateEvent("popstate"));
+                        }}
+                      />
+                    </span>
                     {/* A group with nobody in it grants nothing and, named by
                         a rule, waits for nobody. Said on its row. */}
                     <span
@@ -827,7 +828,7 @@ function AddMember({
     return (
       <div className="bs-panel-foot">
         {chosen.kind === "group" ? (
-          <AppIcon icon={Users} size="sm" />
+          <AppIcon icon={ICON.people} size="sm" />
         ) : (
           <PersonAvatar
             person={{ login: chosen.login, fullName: chosen.label }}
@@ -926,7 +927,7 @@ function AddMember({
                     }}
                   >
                     {match.kind === "group" ? (
-                      <AppIcon icon={Users} size="sm" />
+                      <AppIcon icon={ICON.people} size="sm" />
                     ) : (
                       <PersonAvatar
                         person={{ login: match.login, fullName: match.label }}
@@ -959,54 +960,6 @@ function AddMember({
 }
 
 /* ── Sign-off rules ───────────────────────────────────────────────────── */
-
-/** A rule on screen. `key` survives the rule's target being changed. */
-interface DraftRule extends SignOffRuleView {
-  key: string;
-}
-
-let nextKey = 0;
-function draftFrom(rule: SignOffRuleView): DraftRule {
-  nextKey += 1;
-  return { ...rule, key: `rule-${nextKey}` };
-}
-
-/**
- * The picker's value: scope and target in one string.
- *
- * One `<select>` rather than two controls, because "what has to be signed off"
- * is one question. The split is on the first colon only, since a folder path
- * may contain anything.
- */
-function targetValue(rule: Pick<SignOffRuleView, "scope" | "target">) {
-  return rule.scope === "binder" || rule.scope === "rules"
-    ? rule.scope
-    : `${rule.scope}:${rule.target}`;
-}
-
-function parseTargetValue(
-  value: string,
-): Pick<SignOffRuleView, "scope" | "target"> {
-  if (value === "binder") return { scope: "binder", target: "" };
-  if (value === "rules") return { scope: "rules", target: "" };
-  const at = value.indexOf(":");
-  return {
-    scope: value.slice(0, at) === "document" ? "document" : "folder",
-    target: value.slice(at + 1),
-  };
-}
-
-/** The part of a rule that is sent, in an order that compares. */
-function ruleSignature(rules: SignOffRuleView[]): string {
-  return JSON.stringify(
-    rules.map(({ scope, target, teams, users }) => [
-      scope,
-      target,
-      [...teams].sort(),
-      [...users].sort(),
-    ]),
-  );
-}
 
 /** "A", "A and B", "A, B and C" — the way a person would say a list. */
 function listSentence(items: string[]): string {
@@ -1087,112 +1040,14 @@ export function describeOwners(
 function scopeIcon(scope: SignOffRuleView["scope"]) {
   switch (scope) {
     case "binder":
-      return Library;
+      return ICON.binder;
     case "folder":
-      return Folder;
+      return ICON.folder;
     case "document":
-      return FileText;
+      return ICON.document;
     case "rules":
-      return ShieldCheck;
+      return ICON.rules;
   }
-}
-
-/**
- * The two pickers a rule is made of.
- *
- * Whatever the rule already points at stays on the list even if the binder no
- * longer holds it, so opening a rule to fix its group cannot silently retarget
- * it at whichever folder sorts first.
- */
-function RulePickers({
-  target,
-  team,
-  folders,
-  documents,
-  groups,
-  busy,
-  current,
-  onTarget,
-  onTeam,
-}: {
-  target: string;
-  team: string;
-  folders: string[];
-  documents: SignOffDocumentView[];
-  groups: string[];
-  busy: boolean;
-  /** The rule being edited, so a target the binder no longer holds is kept. */
-  current?: Pick<SignOffRuleView, "scope" | "target">;
-  onTarget: (value: string) => void;
-  onTeam: (value: string) => void;
-}) {
-  const missing =
-    current !== undefined &&
-    current.scope !== "binder" &&
-    current.scope !== "rules" &&
-    !folders.includes(current.target) &&
-    !documents.some((entry) => entry.uid === current.target);
-
-  return (
-    <>
-      <select
-        className="bs-input bs-input--sm bs-settings-pick"
-        value={target}
-        disabled={busy}
-        aria-label="What has to be signed off"
-        onChange={(event) => onTarget(event.target.value)}
-      >
-        {current === undefined ? (
-          <option value="">What it covers…</option>
-        ) : null}
-        <option value="binder">Everything in this binder</option>
-        {missing ? (
-          <option value={targetValue(current)}>
-            {describeTarget(current, documents)}
-          </option>
-        ) : null}
-        {folders.length > 0 ? (
-          <optgroup label="A folder">
-            {folders.map((folder) => (
-              <option key={folder} value={`folder:${folder}`}>
-                {describeFolder(folder)}
-              </option>
-            ))}
-          </optgroup>
-        ) : null}
-        {documents.length > 0 ? (
-          <optgroup label="One document">
-            {documents.map((entry) => (
-              <option key={entry.uid} value={`document:${entry.uid}`}>
-                {formatDocumentName(entry.name)}
-                {entry.folder === ""
-                  ? ""
-                  : ` — ${describeFolder(entry.folder)}`}
-              </option>
-            ))}
-          </optgroup>
-        ) : null}
-        {/* Last: the rarest thing to choose and the worst to land on by
-            accident — but present, because without it anybody who can open a
-            change request can propose removing every rule on this page. */}
-        <option value="rules">Who signs things off in this binder</option>
-      </select>
-      <select
-        className="bs-input bs-input--sm bs-settings-pick"
-        value={team}
-        disabled={busy}
-        aria-label="Which group signs it off"
-        onChange={(event) => onTeam(event.target.value)}
-      >
-        <option value="">Signed off by…</option>
-        {groups.map((group) => (
-          <option key={group} value={group}>
-            {describeGroupName(group)}
-          </option>
-        ))}
-      </select>
-    </>
-  );
 }
 
 /* ── The approval count ───────────────────────────────────────────────── */
@@ -1297,22 +1152,6 @@ function ApprovalsTab({
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const [draft, setDraft] = useState<DraftRule[]>(() =>
-    signOff.rules.map(draftFrom),
-  );
-  const [editingRule, setEditingRule] = useState<string | null>(null);
-  const [adding, setAdding] = useState(false);
-  const [newTarget, setNewTarget] = useState("");
-  const [newTeam, setNewTeam] = useState("");
-  const [proposing, setProposing] = useState(false);
-  const [opened, setOpened] = useState<number | null>(null);
-
-  const pending = signOff.pendingChange;
-  const changed = ruleSignature(draft) !== ruleSignature(signOff.rules);
-  // Two open at once would leave competing versions of the rules in review,
-  // and whichever was published last would silently win.
-  const drafting = canManage && pending === null && opened === null;
-
   /** The binder's own rules: saved straight away, answered with the new state. */
   async function change(next: {
     blockOnUnresolvedThreads?: boolean;
@@ -1345,33 +1184,11 @@ function ApprovalsTab({
     }
   }
 
-  async function propose() {
-    setProposing(true);
-    setNotice(null);
-    try {
-      const result = await proposeBinderSignOff(
-        org,
-        binder,
-        draft.map(({ scope, target, teams, users }) => ({
-          scope,
-          target,
-          teams,
-          users,
-        })),
-      );
-      setEditingRule(null);
-      setOpened(result.changeNumber);
-    } catch (err: unknown) {
-      setNotice(errorMessage(err, "Unable to propose these rules."));
-    } finally {
-      setProposing(false);
-    }
-  }
-
-  const update = (key: string, next: Partial<SignOffRuleView>) =>
-    setDraft(
-      draft.map((entry) => (entry.key === key ? { ...entry, ...next } : entry)),
-    );
+  const pending = signOff.pendingChange;
+  const navigate = (route: AppRoute) => {
+    window.history.pushState({}, "", routeToPath(route));
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  };
 
   return (
     <>
@@ -1417,72 +1234,20 @@ function ApprovalsTab({
               onCount={(count) => void change({ requiredApprovals: count })}
               onApprovers={(approvers) => change({ approvers })}
             />
-            {draft.map((rule) =>
-              editingRule === rule.key && drafting ? (
-                <tr key={rule.key}>
-                  <td colSpan={3}>
-                    <div className="bs-settings-rules-edit">
-                      <RulePickers
-                        target={targetValue(rule)}
-                        team={rule.teams[0] ?? ""}
-                        folders={signOff.folders}
-                        documents={signOff.documents}
-                        groups={signOff.groups}
-                        busy={proposing}
-                        current={rule}
-                        onTarget={(value) =>
-                          update(rule.key, parseTargetValue(value))
-                        }
-                        onTeam={(value) =>
-                          update(rule.key, {
-                            teams: value === "" ? [] : [value],
-                          })
-                        }
-                      />
-                      <button
-                        type="button"
-                        className="bs-btn bs-btn--sm bs-btn-secondary"
-                        onClick={() => setEditingRule(null)}
-                      >
-                        Done
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                <RuleRow
-                  key={rule.key}
-                  rule={rule}
-                  documents={signOff.documents}
-                  emptyGroups={signOff.emptyGroups}
-                  actions={
-                    drafting ? (
-                      <span className="bs-rowacts">
-                        <button
-                          type="button"
-                          className="bs-rowact"
-                          disabled={proposing}
-                          aria-label={`Change the rule for ${describeTarget(rule, signOff.documents)}`}
-                          title="Change"
-                          onClick={() => setEditingRule(rule.key)}
-                        >
-                          <AppIcon icon={Pencil} size="sm" />
-                        </button>
-                        <RemoveButton
-                          label={`Remove the rule for ${describeTarget(rule, signOff.documents)}`}
-                          busy={proposing}
-                          onClick={() =>
-                            setDraft(
-                              draft.filter((entry) => entry.key !== rule.key),
-                            )
-                          }
-                        />
-                      </span>
-                    ) : null
-                  }
-                />
-              ),
-            )}
+            {/* **A list, not an editor** (4.12). Every rule in the binder,
+                each linking to the folder, document or binder it is set on;
+                they are changed there, in the editor, in a draft. */}
+            {signOff.rules.map((rule) => (
+              <RuleRow
+                key={`${rule.scope}:${rule.target}`}
+                rule={rule}
+                documents={signOff.documents}
+                emptyGroups={signOff.emptyGroups}
+                place={placeOf(org, binder, rule, signOff.documents)}
+                onNavigate={navigate}
+                actions={null}
+              />
+            ))}
             {/* A rule the screen omitted would be a rule somebody believes is
                 not there. Gitea drops what it cannot read with only a log
                 warning, so this row is the only place it is ever visible. */}
@@ -1490,7 +1255,7 @@ function ApprovalsTab({
               <tr key={`unreadable-${line.line}`}>
                 <td colSpan={3}>
                   <span className="bs-settings-rules-target bs-row-meta--warn">
-                    <AppIcon icon={AlertTriangle} size="sm" />
+                    <AppIcon icon={ICON.warning} size="sm" />
                     <span>
                       A rule that cannot be read, and enforces nothing:{" "}
                       <code className="bs-filename">{line.text}</code>
@@ -1502,122 +1267,25 @@ function ApprovalsTab({
           </tbody>
         </table>
 
-        {drafting ? (
-          adding ? (
-            <div className="bs-panel-foot">
-              <RulePickers
-                target={newTarget}
-                team={newTeam}
-                folders={signOff.folders}
-                documents={signOff.documents}
-                groups={signOff.groups}
-                busy={proposing}
-                onTarget={setNewTarget}
-                onTeam={setNewTeam}
-              />
-              <button
-                type="button"
-                className="bs-btn bs-btn--sm bs-btn-secondary"
-                aria-label="Add this rule"
-                disabled={proposing || newTarget === "" || newTeam === ""}
-                onClick={() => {
-                  setDraft([
-                    ...draft,
-                    draftFrom({
-                      ...parseTargetValue(newTarget),
-                      teams: [newTeam],
-                      users: [],
-                    }),
-                  ]);
-                  setNewTarget("");
-                  setNewTeam("");
-                  setAdding(false);
-                }}
-              >
-                Add
-              </button>
-              <button
-                type="button"
-                className="bs-btn bs-btn--sm bs-btn--quiet"
-                onClick={() => {
-                  setAdding(false);
-                  setNewTarget("");
-                  setNewTeam("");
-                }}
-              >
-                Cancel
-              </button>
-            </div>
-          ) : (
-            <div className="bs-panel-foot">
-              <button
-                type="button"
-                className="bs-btn bs-btn--sm bs-btn--quiet"
-                onClick={() => setAdding(true)}
-              >
-                <AppIcon icon={Plus} size="sm" />
-                Add a rule for a folder or document
-              </button>
-            </div>
-          )
-        ) : null}
-
-        {/* Why the document picker is short, when it is. A document rule is
-            keyed on the identity in the filename, so a binder filed before
-            that existed offers no documents at all. */}
-        {drafting &&
-        adding &&
-        signOff.documents.length === 0 &&
-        signOff.unnameableDocuments > 0 ? (
-          <div className="bs-panel-foot">
-            {signOff.unnameableDocuments === 1
-              ? "The document in this binder was filed before Bindersnap tracked documents individually, so a rule can only cover its folder."
-              : `The ${signOff.unnameableDocuments} documents in this binder were filed before Bindersnap tracked documents individually, so a rule can only cover their folders.`}
-          </div>
-        ) : null}
-
-        {drafting && changed ? (
-          <div className="bs-panel-foot">
-            <span className="bs-panel-foot-note">
-              Changing a folder or document rule is itself a change to the
-              binder, so it goes through the same approval your documents do.
-            </span>
-            <button
-              type="button"
-              className="bs-btn bs-btn--sm bs-btn--quiet"
-              disabled={proposing}
-              onClick={() => {
-                setEditingRule(null);
-                setDraft(signOff.rules.map(draftFrom));
-              }}
-            >
-              Undo
-            </button>
-            <button
-              type="button"
-              className="bs-btn bs-btn--sm bs-btn-primary"
-              disabled={proposing}
-              onClick={() => void propose()}
-            >
-              {proposing ? "Opening a change…" : "Propose these rules"}
-            </button>
-          </div>
-        ) : canManage && (opened ?? pending) !== null ? (
-          <div className="bs-panel-foot">
-            <span className="bs-panel-foot-note">
-              {opened !== null
-                ? "We opened a change request for these rules. Nothing takes effect until it is published."
-                : "A change to these rules is already waiting for a decision."}
-            </span>
-            <button
-              type="button"
-              className="bs-btn bs-btn--sm bs-btn-secondary"
-              onClick={() => onOpenChange((opened ?? pending)!)}
-            >
-              Review the change
-            </button>
-          </div>
-        ) : null}
+        <div className="bs-panel-foot">
+          <span className="bs-panel-foot-note">
+            Who signs off is changed on each folder, in the editor.
+            {pending !== null && canManage ? (
+              <>
+                {" "}
+                A change to these rules made here before is still waiting for a
+                decision.{" "}
+                <button
+                  type="button"
+                  className="bs-linkbtn"
+                  onClick={() => onOpenChange(pending)}
+                >
+                  Review it
+                </button>
+              </>
+            ) : null}
+          </span>
+        </div>
       </div>
 
       <section
@@ -1773,7 +1441,7 @@ function EveryChangeRow({
     <tr>
       <td>
         <span className="bs-settings-rules-target">
-          <AppIcon icon={Library} size="sm" />
+          <AppIcon icon={ICON.binder} size="sm" />
           <span>
             <span className="rev-rules-name">Every change</span>
             <span className="rev-rules-owners">
@@ -1872,26 +1540,65 @@ function EveryChangeRow({
   );
 }
 
+/** Where a rule is set: its folder's page, its document, or the binder. */
+function placeOf(
+  org: string,
+  binder: string,
+  rule: SignOffRuleView,
+  documents: SignOffDocumentView[],
+): AppRoute | null {
+  if (rule.scope === "folder") {
+    return { kind: "binder", org, binder, folder: rule.target };
+  }
+  if (rule.scope === "document") {
+    const document = documents.find((entry) => entry.uid === rule.target);
+    return document
+      ? {
+          kind: "binderDocument",
+          org,
+          binder,
+          documentPath: document.slugPath,
+        }
+      : null;
+  }
+  return { kind: "binder", org, binder };
+}
+
 /** A sign-off rule, as a row of the table: what it covers, who signs it off. */
 function RuleRow({
   rule,
   documents,
   emptyGroups,
   actions,
+  place = null,
+  onNavigate,
 }: {
   rule: SignOffRuleView;
   documents: SignOffDocumentView[];
   emptyGroups: string[];
   actions: ReactNode;
+  /** Where the rule is set, for its link. */
+  place?: AppRoute | null;
+  onNavigate?: (route: AppRoute) => void;
 }) {
   const owners = describeOwners(rule, emptyGroups);
+  const name = describeTarget(rule, documents);
   return (
     <tr>
       <td>
         <span className="bs-settings-rules-target">
           <AppIcon icon={scopeIcon(rule.scope)} size="sm" />
           <span className="rev-rules-name">
-            {describeTarget(rule, documents)}
+            {place && onNavigate ? (
+              <a
+                href={routeToPath(place)}
+                onClick={(event) => followInApp(event, () => onNavigate(place))}
+              >
+                {name}
+              </a>
+            ) : (
+              name
+            )}
           </span>
         </span>
       </td>

@@ -630,3 +630,38 @@ export const activityBuilds = sqliteTable("activity_builds", {
   /** Binders or organizations that could not be read, as JSON. */
   errors: text("errors").notNull(),
 });
+
+/**
+ * Somebody on the public site asked to be emailed a template, a policy
+ * manual index or the checklist (`services/api/resource-requests.ts`).
+ *
+ * The one list of people who are not customers. Each row is a request the
+ * person made themselves, with the page it was for, so we can send what they
+ * asked for and write to them again until they say stop. Configuration about
+ * a visitor, not evidence, so SQLite (ADR 0004). One row per address and
+ * page; unsubscribing marks every row for the address.
+ */
+export const resourceRequests = sqliteTable(
+  "resource_requests",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    /** Lower-cased. */
+    email: text("email").notNull(),
+    /** The site page asked for: `/templates/hand-hygiene-policy`. */
+    resource: text("resource").notNull(),
+    /** In every email to this address; the only credential to stop them. */
+    unsubscribeToken: text("unsubscribe_token").notNull(),
+    createdAt: integer("created_at").notNull(),
+    /** The last time they asked for this page again. */
+    requestedAt: integer("requested_at").notNull(),
+    unsubscribedAt: integer("unsubscribed_at"),
+  },
+  (table) => [
+    uniqueIndex("resource_requests_email_resource_idx").on(
+      table.email,
+      table.resource,
+    ),
+    index("resource_requests_token_idx").on(table.unsubscribeToken),
+    index("resource_requests_created_at_idx").on(table.createdAt),
+  ],
+);

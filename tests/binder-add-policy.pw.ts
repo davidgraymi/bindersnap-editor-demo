@@ -31,6 +31,7 @@ import {
   APP_BASE_URL,
   openBinderSection,
   openTreeFolder,
+  openAddDocument,
 } from "./helpers";
 import { signUpAndConfirm } from "./mailpit";
 import { LEGAL_VERSION } from "../packages/utils/legal";
@@ -170,7 +171,7 @@ test("a member files a policy from the binder's own page", async ({ page }) => {
   // An empty binder says so rather than showing a blank list.
   await expect(page.getByText("Nothing filed here yet.")).toBeVisible();
 
-  await page.getByRole("button", { name: "Add a document" }).click();
+  await openAddDocument(page);
   await expect(
     page.getByRole("heading", { name: "Add a document" }),
   ).toBeVisible();
@@ -185,9 +186,12 @@ test("a member files a policy from the binder's own page", async ({ page }) => {
   // The change's own screen: the document it proposes, and the way back to
   // the list. Not "Publish", which a change with no approvals yet does not
   // offer.
+  // Its Changes tab names the document (the overview no longer repeats it).
+  await page.locator(".doc-tab", { hasText: "Changes" }).click();
   await expect(
-    page.locator(".change-does").getByText("Infection Control Policy"),
+    page.locator(".cmp-file").getByText("Infection Control Policy").first(),
   ).toBeVisible({ timeout: 30_000 });
+  await page.locator(".doc-tab", { hasText: "Overview" }).click();
   await expect(
     page.locator(".page-path").getByRole("link", { name: "Change requests" }),
   ).toBeVisible();
@@ -222,7 +226,7 @@ test("a new change is sent to the binder's people as it is opened", async ({
 
   await signInBrowser(page, sessionCookie);
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
-  await page.getByRole("button", { name: "Add a document" }).click();
+  await openAddDocument(page);
 
   // In a binder this small everyone else is asked, and never the author.
   const chooser = page.getByRole("group", { name: "Who should review it" });
@@ -267,7 +271,7 @@ test("a whole folder goes in as one change request, keeping its shape", async ({
 
   await signInBrowser(page, sessionCookie);
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
-  await page.getByRole("button", { name: "Add a document" }).click();
+  await openAddDocument(page);
   await page.locator("#add-policy-folder-input").setInputFiles(manual);
 
   // What will go in, and what will not, before anything is sent.
@@ -281,9 +285,13 @@ test("a whole folder goes in as one change request, keeping its shape", async ({
   await expect(
     page.getByRole("heading", { name: "Add 2 documents" }),
   ).toBeVisible({ timeout: 30_000 });
-  const does = page.locator(".change-does");
-  await expect(does.getByText("manual/fire-safety-plan")).toBeVisible();
-  await expect(does.getByText("manual/nursing/hand-hygiene")).toBeVisible();
+  await page.locator(".doc-tab", { hasText: "Changes" }).click();
+  const tree = page.locator(".cmp-tree");
+  await expect(tree.getByText("Fire Safety Plan")).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(tree.getByText("Hand Hygiene")).toBeVisible();
+  await page.locator(".doc-tab", { hasText: "Overview" }).click();
   // Opened once, whole — not opened and then updated file by file.
   await expect(page.getByText("updated the proposed version")).toHaveCount(0);
 });
@@ -371,7 +379,7 @@ test("the library lists a policy across every binder it can reach", async ({
     [corporate, "Expenses Policy"],
   ] as const) {
     await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
-    await page.getByRole("button", { name: "Add a document" }).click();
+    await openAddDocument(page);
     await fileAPolicy(page, name, "");
     // Filing opens a change request, which is where it lands.
     await expect(page).toHaveURL(/\/-\/changes\/\d+/, {
@@ -437,7 +445,7 @@ test("the binder's tabs still work once a document is open", async ({
 
   await signInBrowser(page, sessionCookie);
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
-  await page.getByRole("button", { name: "Add a document" }).click();
+  await openAddDocument(page);
   await fileAPolicy(page, "Hand Hygiene Policy", "nursing");
   await expect(page).toHaveURL(/\/-\/changes\/\d+/, { timeout: 30_000 });
 
@@ -535,7 +543,11 @@ test("the header's one filled button belongs to the tab it sits above", async ({
   await signInBrowser(page, sessionCookie);
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
 
-  const addAPolicy = page.getByRole("button", { name: "Add a document" });
+  // The header's one button, Edit, is the contents' own: not on the binder's
+  // other screens.
+  const addAPolicy = page
+    .locator(".bs-pagehead-actions")
+    .getByRole("button", { name: "Edit", exact: true });
   await expect(addAPolicy).toBeVisible();
 
   for (const section of ["Change requests", "History", "Settings"] as const) {
@@ -616,7 +628,7 @@ test("a Word file added with 'Make it editable' is stored as a Bindersnap docume
 
   await signInBrowser(page, sessionCookie);
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
-  await page.getByRole("button", { name: "Add a document" }).click();
+  await openAddDocument(page);
 
   const word = await Packer.toBuffer(
     new Document({
@@ -675,7 +687,7 @@ test("a Word file added as it is stays a Word file", async ({ page }) => {
 
   await signInBrowser(page, sessionCookie);
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
-  await page.getByRole("button", { name: "Add a document" }).click();
+  await openAddDocument(page);
 
   await page.locator("#add-policy-file").setInputFiles({
     name: "fire-safety.docx",
@@ -742,7 +754,7 @@ test("a Word file's converted new version is compared with the Word file, as a d
   // On the record as a Word file first: a revision is read against it.
   await signInBrowser(page, sessionCookie);
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
-  await page.getByRole("button", { name: "Add a document" }).click();
+  await openAddDocument(page);
   await page
     .locator("#add-policy-file")
     .setInputFiles({ ...wordFile, buffer: await word("Wash before care.") });
@@ -750,9 +762,15 @@ test("a Word file's converted new version is compared with the Word file, as a d
   await expect(page).toHaveURL(/\/-\/changes\/\d+/, { timeout: 60_000 });
   await publishTheOpenChange(sessionCookie, org, binder);
 
-  // Its next version, made editable as it is uploaded.
+  // Its next version, made editable as it is uploaded — from the editor,
+  // where Upload new version is now, into the draft.
   await page.goto(`${APP_BASE_URL}/${org}/${binder}/-/blob/main/hand-hygiene`);
   await page
+    .locator(".bs-pagehead-actions")
+    .getByRole("button", { name: "Edit", exact: true })
+    .click({ timeout: 30_000 });
+  await page
+    .getByRole("complementary", { name: "About this file" })
     .getByRole("button", { name: "Upload new version" })
     .click({ timeout: 30_000 });
   await page.locator("#revise-document-file").setInputFiles({
@@ -762,12 +780,23 @@ test("a Word file's converted new version is compared with the Word file, as a d
   await page
     .getByRole("checkbox", { name: "Make it editable in Bindersnap" })
     .check();
-  await page.getByRole("button", { name: "Propose this version" }).click();
-  await expect(page).toHaveURL(/\/-\/changes\/(\d+)/, { timeout: 60_000 });
-  const changeUrl = page
-    .url()
-    .replace(/[?#].*$/, "")
-    .replace(/\/diffs$/, "");
+  await page.getByRole("button", { name: "Save to your draft" }).click();
+  // Now a Bindersnap document: the note over a file goes.
+  await expect(
+    page.getByRole("complementary", { name: "About this file" }),
+  ).toHaveCount(0, { timeout: 60_000 });
+  const branch = new URL(page.url()).searchParams.get("draft");
+  expect(branch, "the editor names its draft").toBeTruthy();
+  const proposed = await page.request.post(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/changes`,
+    {
+      headers: { Origin: APP_BASE_URL },
+      data: { title: "Hand hygiene, in Bindersnap", draft: branch },
+    },
+  );
+  expect(proposed.ok(), await proposed.text()).toBe(true);
+  const { changeNumber } = (await proposed.json()) as { changeNumber: number };
+  const changeUrl = `${APP_BASE_URL}/${org}/${binder}/-/changes/${changeNumber}`;
 
   // **The bug this guards.** Read by the new `.json` name, the Word file it
   // replaces was diffed as the bytes of a ZIP. Each side read as what it is,

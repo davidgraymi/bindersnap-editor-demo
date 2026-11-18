@@ -54,6 +54,9 @@ export function ChangeTargetField({
             // A sign-off change is about who approves, not about a policy. The
             // server refuses one; not offering it is the kinder half.
             .filter((change) => !change.branchName.startsWith("sign-off/"))
+            // And only a change that is yours to add to: its author's, or
+            // one you were named a co-editor of. The server refuses the rest.
+            .filter((change) => change.viewerCanEdit)
             .map((change) => ({
               number: change.number,
               // The same name the changes list shows, so the option a person

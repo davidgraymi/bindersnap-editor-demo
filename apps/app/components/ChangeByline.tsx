@@ -1,4 +1,4 @@
-import { GitBranch } from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 import type { ReactNode } from "react";
 
 import { followInApp } from "../appLink";
@@ -7,6 +7,13 @@ import { describePublishIntent } from "../changedDocuments";
 import { formatShortDate } from "../documentDisplay";
 
 interface ChangeBylineProps {
+  /** The change edits `.gitea/CODEOWNERS`: "… and change who signs off". */
+  changesRules?: boolean;
+  /**
+   * The "from <draft>" chip and the date. The overview puts them in its rail
+   * (About this change); the Changes tab keeps them here.
+   */
+  showFrom?: boolean;
   /** The badge: open, or how it ended. */
   status?: ReactNode;
   /** Who proposed it, as a name. */
@@ -51,6 +58,8 @@ export function ChangeByline({
   onOpenBranch,
   openedAt,
   nameOf,
+  changesRules = false,
+  showFrom = true,
 }: ChangeBylineProps) {
   const intent =
     documents === 0
@@ -65,7 +74,13 @@ export function ChangeByline({
       {status}
       <span>
         <strong>{author || "Somebody"}</strong> {intent}
-        {branch ? (
+        {changesRules && documents > 0
+          ? open
+            ? " and change who signs off"
+            : " and changed who signs off"
+          : ""}
+        {showFrom ? "" : "."}
+        {branch && showFrom ? (
           <>
             {" from "}
             {/* The branch's root, not its first file — the whole binder as
@@ -76,14 +91,14 @@ export function ChangeByline({
               title={branch}
               onClick={(event) => followInApp(event, onOpenBranch)}
             >
-              <GitBranch size={12} strokeWidth={1.75} aria-hidden="true" />
+              <AppIcon icon={ICON.draft} size="xs" />
               <span className="cmp-branch-label">
                 {branchLabel ?? describeBranch(branch, nameOf)}
               </span>
             </a>
           </>
         ) : null}
-        {when ? (
+        {when && showFrom ? (
           <span className="bs-nowrap">
             {" · opened "}
             {when}

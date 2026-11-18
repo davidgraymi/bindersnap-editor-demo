@@ -6,72 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import type { Editor } from "@tiptap/core";
-import {
-  AArrowDown,
-  AArrowUp,
-  AlignCenter,
-  AlignJustify,
-  AlignLeft,
-  AlignRight,
-  Baseline,
-  Bold,
-  CalendarDays,
-  CaseSensitive,
-  ChevronDown,
-  ChevronUp,
-  ClipboardPaste,
-  Ellipsis,
-  Code,
-  Columns3,
-  Copy,
-  FileText,
-  Highlighter,
-  Image as ImageIcon,
-  IndentDecrease,
-  IndentIncrease,
-  Italic,
-  ImageMinus,
-  Link as LinkIcon,
-  List,
-  ListChecks,
-  ListOrdered,
-  ListTree,
-  MessageSquareText,
-  Minus,
-  PaintBucket,
-  Paintbrush,
-  MoveHorizontal,
-  Printer,
-  Quote,
-  Redo2,
-  RemoveFormatting,
-  Replace,
-  RotateCcw,
-  Rows3,
-  Scaling,
-  ScanText,
-  Scissors,
-  Pilcrow,
-  Search,
-  SeparatorHorizontal,
-  Sigma,
-  SquareSplitHorizontal,
-  Strikethrough,
-  Subscript as SubscriptIcon,
-  Superscript as SuperscriptIcon,
-  Table as TableIcon,
-  TableCellsMerge,
-  TableCellsSplit,
-  Trash2,
-  Type,
-  Underline as UnderlineIcon,
-  Undo2,
-  WrapText,
-  ZoomIn,
-  ZoomOut,
-  Upload,
-  Keyboard,
-} from "lucide-react";
+import { AppIcon, ICON, type IconGlyph } from "../../ui-tokens/icons";
 
 import { LINE_SPACINGS } from "../documentSchema";
 import { CASE_MODES } from "../extensions/ChangeCase";
@@ -301,7 +236,7 @@ export function Ribbon({
   const undoRedo = (
     <>
       <RibbonButton
-        icon={Undo2}
+        icon={ICON.undo}
         label="Undo"
         shortcut="Ctrl+Z"
         disabled={!format.canUndo && !outsideUndo}
@@ -311,7 +246,7 @@ export function Ribbon({
         }}
       />
       <RibbonButton
-        icon={Redo2}
+        icon={ICON.redo}
         label="Redo"
         shortcut="Ctrl+Y"
         disabled={!format.canRedo}
@@ -433,9 +368,9 @@ export function Ribbon({
             onClick={() => setLayout(simple ? "classic" : "simple")}
           >
             {simple ? (
-              <ChevronDown size={14} strokeWidth={2} aria-hidden="true" />
+              <AppIcon icon={ICON.chevronDown} size="sm" heavy />
             ) : (
-              <ChevronUp size={14} strokeWidth={2} aria-hidden="true" />
+              <AppIcon icon={ICON.chevronUp} size="sm" heavy />
             )}
           </button>
         </div>
@@ -546,7 +481,7 @@ function HomeTab({
         {/* Word's split button: the top pastes, the arrow asks how. */}
         <div className="bs-rsplit">
           <RibbonButton
-            icon={ClipboardPaste}
+            icon={ICON.paste}
             label="Paste"
             shortcut="Ctrl+V"
             large
@@ -584,7 +519,7 @@ function HomeTab({
         </div>
         <div className="bs-rstack">
           <RibbonButton
-            icon={Scissors}
+            icon={ICON.cut}
             label="Cut"
             shortcut="Ctrl+X"
             showLabel={!compactClipboard}
@@ -595,7 +530,7 @@ function HomeTab({
             }}
           />
           <RibbonButton
-            icon={Copy}
+            icon={ICON.copy}
             label="Copy"
             shortcut="Ctrl+C"
             showLabel={!compactClipboard}
@@ -606,7 +541,7 @@ function HomeTab({
             }}
           />
           <RibbonButton
-            icon={Paintbrush}
+            icon={ICON.formatPainter}
             label="Format Painter"
             shortcut="Ctrl+Alt+C"
             tip="Format Painter: click, then select the words to give this look to. Double-click to keep it on; Escape stops."
@@ -625,7 +560,7 @@ function HomeTab({
       <RibbonGroup
         label="Font"
         className="bs-rgroup--font"
-        icon={Type}
+        icon={ICON.font}
         folded={foldFont}
       >
         <RibbonRow>
@@ -673,60 +608,60 @@ function HomeTab({
             <span className="bs-rdrop-value">{size ?? ""}</span>
           </DropButton>
           <RibbonButton
-            icon={AArrowUp}
+            icon={ICON.growFont}
             label="Grow font"
             shortcut="Ctrl+]"
             onClick={() => setSize(stepFontSize(size ?? 11, 1))}
           />
           <RibbonButton
-            icon={AArrowDown}
+            icon={ICON.shrinkFont}
             label="Shrink font"
             shortcut="Ctrl+["
             onClick={() => setSize(stepFontSize(size ?? 11, -1))}
           />
           <RibbonButton
-            icon={RemoveFormatting}
+            icon={ICON.clearFormatting}
             label="Clear formatting"
             onClick={() => chain().unsetAllMarks().run()}
           />
         </RibbonRow>
         <RibbonRow>
           <RibbonButton
-            icon={Bold}
+            icon={ICON.bold}
             label="Bold"
             shortcut="Ctrl+B"
             active={format.bold}
             onClick={() => chain().toggleBold().run()}
           />
           <RibbonButton
-            icon={Italic}
+            icon={ICON.italic}
             label="Italic"
             shortcut="Ctrl+I"
             active={format.italic}
             onClick={() => chain().toggleItalic().run()}
           />
           <RibbonButton
-            icon={UnderlineIcon}
+            icon={ICON.underline}
             label="Underline"
             shortcut="Ctrl+U"
             active={format.underline}
             onClick={() => chain().toggleUnderline().run()}
           />
           <RibbonButton
-            icon={Strikethrough}
+            icon={ICON.strikethrough}
             label="Strikethrough"
             active={format.strike}
             onClick={() => chain().toggleStrike().run()}
           />
           <RibbonButton
-            icon={SubscriptIcon}
+            icon={ICON.subscript}
             label="Subscript"
             shortcut="Ctrl+,"
             active={format.subscript}
             onClick={() => chain().unsetSuperscript().toggleSubscript().run()}
           />
           <RibbonButton
-            icon={SuperscriptIcon}
+            icon={ICON.superscript}
             label="Superscript"
             shortcut="Ctrl+."
             active={format.superscript}
@@ -734,7 +669,7 @@ function HomeTab({
           />
           <ColorDrop
             label="Font color"
-            icon={Baseline}
+            icon={ICON.fontColor}
             current={format.color}
             colors={TEXT_COLORS}
             noneLabel="Automatic"
@@ -746,7 +681,7 @@ function HomeTab({
           />
           <ColorDrop
             label="Text highlight color"
-            icon={Highlighter}
+            icon={ICON.highlight}
             current={format.highlight}
             colors={HIGHLIGHT_COLORS}
             noneLabel="No color"
@@ -778,39 +713,43 @@ function HomeTab({
               ))
             }
           >
-            <CaseSensitive size={16} strokeWidth={1.75} aria-hidden="true" />
+            <AppIcon icon={ICON.matchCase} size="md" />
           </DropButton>
         </RibbonRow>
       </RibbonGroup>
 
-      <RibbonGroup label="Paragraph" icon={AlignLeft} folded={foldParagraph}>
+      <RibbonGroup
+        label="Paragraph"
+        icon={ICON.alignLeft}
+        folded={foldParagraph}
+      >
         <RibbonRow>
           <RibbonButton
-            icon={List}
+            icon={ICON.bulletList}
             label="Bullets"
             active={format.bulletList}
             onClick={() => chain().toggleBulletList().run()}
           />
           <RibbonButton
-            icon={ListOrdered}
+            icon={ICON.numberedList}
             label="Numbering"
             active={format.orderedList}
             onClick={() => chain().toggleOrderedList().run()}
           />
           <RibbonButton
-            icon={ListChecks}
+            icon={ICON.checklist}
             label="Checklist"
             active={format.taskList}
             onClick={() => chain().toggleTaskList().run()}
           />
           <RibbonButton
-            icon={IndentDecrease}
+            icon={ICON.decreaseIndent}
             label="Decrease indent"
             shortcut="Shift+Tab"
             onClick={() => outdent(editor)}
           />
           <RibbonButton
-            icon={IndentIncrease}
+            icon={ICON.increaseIndent}
             label="Increase indent"
             shortcut="Tab"
             onClick={() => indent(editor)}
@@ -818,28 +757,28 @@ function HomeTab({
         </RibbonRow>
         <RibbonRow>
           <RibbonButton
-            icon={AlignLeft}
+            icon={ICON.alignLeft}
             label="Align left"
             shortcut="Ctrl+Shift+L"
             active={format.align === "left"}
             onClick={() => chain().setTextAlign("left").run()}
           />
           <RibbonButton
-            icon={AlignCenter}
+            icon={ICON.alignCenter}
             label="Center"
             shortcut="Ctrl+Shift+E"
             active={format.align === "center"}
             onClick={() => chain().setTextAlign("center").run()}
           />
           <RibbonButton
-            icon={AlignRight}
+            icon={ICON.alignRight}
             label="Align right"
             shortcut="Ctrl+Shift+R"
             active={format.align === "right"}
             onClick={() => chain().setTextAlign("right").run()}
           />
           <RibbonButton
-            icon={AlignJustify}
+            icon={ICON.justify}
             label="Justify"
             shortcut="Ctrl+Shift+J"
             active={format.align === "justify"}
@@ -865,7 +804,7 @@ function HomeTab({
               ))
             }
           >
-            <WrapText size={16} strokeWidth={1.75} aria-hidden="true" />
+            <AppIcon icon={ICON.lineSpacing} size="md" />
           </DropButton>
         </RibbonRow>
       </RibbonGroup>
@@ -952,7 +891,7 @@ function HomeTab({
             <span className="sr-only">More styles</span>
           ) : (
             <>
-              <Pilcrow size={22} strokeWidth={1.75} aria-hidden="true" />
+              <AppIcon icon={ICON.styles} size="lg" />
               <span className="bs-rb-label">Styles</span>
             </>
           )}
@@ -997,27 +936,27 @@ function HomeTab({
               </>
             )}
           >
-            <Search size={22} strokeWidth={1.75} aria-hidden="true" />
+            <AppIcon icon={ICON.search} size="lg" />
             <span className="bs-rb-label">Find</span>
           </DropButton>
         ) : (
           <div className="bs-rstack">
             <RibbonButton
-              icon={Search}
+              icon={ICON.search}
               label="Find"
               shortcut="Ctrl+F"
               showLabel
               onClick={() => onFind(false)}
             />
             <RibbonButton
-              icon={Replace}
+              icon={ICON.replace}
               label="Replace"
               shortcut="Ctrl+H"
               showLabel
               onClick={() => onFind(true)}
             />
             <RibbonButton
-              icon={ScanText}
+              icon={ICON.selectAll}
               label="Select all"
               shortcut="Ctrl+A"
               showLabel
@@ -1037,25 +976,25 @@ const ALIGNMENTS = [
     align: "left",
     label: "Align left",
     shortcut: "Ctrl+Shift+L",
-    icon: AlignLeft,
+    icon: ICON.alignLeft,
   },
   {
     align: "center",
     label: "Center",
     shortcut: "Ctrl+Shift+E",
-    icon: AlignCenter,
+    icon: ICON.alignCenter,
   },
   {
     align: "right",
     label: "Align right",
     shortcut: "Ctrl+Shift+R",
-    icon: AlignRight,
+    icon: ICON.alignRight,
   },
   {
     align: "justify",
     label: "Justify",
     shortcut: "Ctrl+Shift+J",
-    icon: AlignJustify,
+    icon: ICON.justify,
   },
 ] as const;
 
@@ -1134,35 +1073,35 @@ function SimpleHomeTab({
 
       <RibbonGroup label="Font" className="bs-rgroup--simple">
         <RibbonButton
-          icon={Bold}
+          icon={ICON.bold}
           label="Bold"
           shortcut="Ctrl+B"
           active={format.bold}
           onClick={() => chain().toggleBold().run()}
         />
         <RibbonButton
-          icon={Italic}
+          icon={ICON.italic}
           label="Italic"
           shortcut="Ctrl+I"
           active={format.italic}
           onClick={() => chain().toggleItalic().run()}
         />
         <RibbonButton
-          icon={UnderlineIcon}
+          icon={ICON.underline}
           label="Underline"
           shortcut="Ctrl+U"
           active={format.underline}
           onClick={() => chain().toggleUnderline().run()}
         />
         <RibbonButton
-          icon={Strikethrough}
+          icon={ICON.strikethrough}
           label="Strikethrough"
           active={format.strike}
           onClick={() => chain().toggleStrike().run()}
         />
         <ColorDrop
           label="Font color"
-          icon={Baseline}
+          icon={ICON.fontColor}
           current={format.color}
           colors={TEXT_COLORS}
           noneLabel="Automatic"
@@ -1174,7 +1113,7 @@ function SimpleHomeTab({
         />
         <ColorDrop
           label="Text highlight color"
-          icon={Highlighter}
+          icon={ICON.highlight}
           current={format.highlight}
           colors={HIGHLIGHT_COLORS}
           noneLabel="No color"
@@ -1185,7 +1124,7 @@ function SimpleHomeTab({
           }
         />
         <RibbonButton
-          icon={RemoveFormatting}
+          icon={ICON.clearFormatting}
           label="Clear formatting"
           onClick={() => chain().unsetAllMarks().run()}
         />
@@ -1193,31 +1132,31 @@ function SimpleHomeTab({
 
       <RibbonGroup label="Paragraph" className="bs-rgroup--simple">
         <RibbonButton
-          icon={List}
+          icon={ICON.bulletList}
           label="Bullets"
           active={format.bulletList}
           onClick={() => chain().toggleBulletList().run()}
         />
         <RibbonButton
-          icon={ListOrdered}
+          icon={ICON.numberedList}
           label="Numbering"
           active={format.orderedList}
           onClick={() => chain().toggleOrderedList().run()}
         />
         <RibbonButton
-          icon={ListChecks}
+          icon={ICON.checklist}
           label="Checklist"
           active={format.taskList}
           onClick={() => chain().toggleTaskList().run()}
         />
         <RibbonButton
-          icon={IndentDecrease}
+          icon={ICON.decreaseIndent}
           label="Decrease indent"
           shortcut="Shift+Tab"
           onClick={() => outdent(editor)}
         />
         <RibbonButton
-          icon={IndentIncrease}
+          icon={ICON.increaseIndent}
           label="Increase indent"
           shortcut="Tab"
           onClick={() => indent(editor)}
@@ -1245,7 +1184,7 @@ function SimpleHomeTab({
             ))
           }
         >
-          <alignment.icon size={16} strokeWidth={1.75} aria-hidden="true" />
+          <AppIcon icon={alignment.icon} size="md" />
         </DropButton>
         <DropButton
           label="Line and paragraph spacing"
@@ -1267,7 +1206,7 @@ function SimpleHomeTab({
             ))
           }
         >
-          <WrapText size={16} strokeWidth={1.75} aria-hidden="true" />
+          <AppIcon icon={ICON.lineSpacing} size="md" />
         </DropButton>
       </RibbonGroup>
 
@@ -1329,13 +1268,13 @@ function SimpleHomeTab({
                     <span className="bs-rdrop-value">{size ?? ""}</span>
                   </DropButton>
                   <RibbonButton
-                    icon={AArrowUp}
+                    icon={ICON.growFont}
                     label="Grow font"
                     shortcut="Ctrl+]"
                     onClick={() => setSize(stepFontSize(size ?? 11, 1))}
                   />
                   <RibbonButton
-                    icon={AArrowDown}
+                    icon={ICON.shrinkFont}
                     label="Shrink font"
                     shortcut="Ctrl+["
                     onClick={() => setSize(stepFontSize(size ?? 11, -1))}
@@ -1343,7 +1282,7 @@ function SimpleHomeTab({
                 </RibbonRow>
                 <RibbonRow>
                   <RibbonButton
-                    icon={SubscriptIcon}
+                    icon={ICON.subscript}
                     label="Subscript"
                     shortcut="Ctrl+,"
                     active={format.subscript}
@@ -1352,7 +1291,7 @@ function SimpleHomeTab({
                     }
                   />
                   <RibbonButton
-                    icon={SuperscriptIcon}
+                    icon={ICON.superscript}
                     label="Superscript"
                     shortcut="Ctrl+."
                     active={format.superscript}
@@ -1379,14 +1318,10 @@ function SimpleHomeTab({
                       ))
                     }
                   >
-                    <CaseSensitive
-                      size={16}
-                      strokeWidth={1.75}
-                      aria-hidden="true"
-                    />
+                    <AppIcon icon={ICON.matchCase} size="md" />
                   </DropButton>
                   <RibbonButton
-                    icon={Paintbrush}
+                    icon={ICON.formatPainter}
                     label="Format Painter"
                     shortcut="Ctrl+Alt+C"
                     tip="Format Painter: click, then select the words to give this look to. Double-click to keep it on; Escape stops."
@@ -1401,7 +1336,7 @@ function SimpleHomeTab({
                     }
                   />
                   <RibbonButton
-                    icon={ClipboardPaste}
+                    icon={ICON.pastePlainText}
                     label="Paste as plain text"
                     shortcut="Ctrl+Shift+V"
                     tip="Paste as plain text, keeping only the words"
@@ -1415,19 +1350,19 @@ function SimpleHomeTab({
             </div>
           )}
         >
-          <Ellipsis size={16} strokeWidth={1.75} aria-hidden="true" />
+          <AppIcon icon={ICON.more} size="md" />
         </DropButton>
       </RibbonGroup>
 
       <RibbonGroup label="Editing" className="bs-rgroup--simple">
         <RibbonButton
-          icon={Search}
+          icon={ICON.search}
           label="Find"
           shortcut="Ctrl+F"
           onClick={() => onFind(false)}
         />
         <RibbonButton
-          icon={Replace}
+          icon={ICON.replace}
           label="Replace"
           shortcut="Ctrl+H"
           onClick={() => onFind(true)}
@@ -1461,7 +1396,7 @@ function ColorDrop({
   onPick,
 }: {
   label: string;
-  icon: typeof Baseline;
+  icon: IconGlyph;
   current: string | null;
   colors: Array<{ label: string; value: string }>;
   noneLabel: string;
@@ -1511,7 +1446,7 @@ function ColorDrop({
       )}
     >
       <span className="bs-rb-icon" aria-hidden="true">
-        <Icon size={16} strokeWidth={1.75} />
+        <AppIcon icon={Icon} size="md" />
         <span
           className="bs-rb-swatch"
           style={{ background: current ?? "transparent" }}
@@ -1536,14 +1471,14 @@ function InsertTab({
     <>
       <RibbonGroup label="Pages">
         <RibbonButton
-          icon={SeparatorHorizontal}
+          icon={ICON.pageBreak}
           label="Page break"
           shortcut="Ctrl+Enter"
           large
           onClick={() => chain().setPageBreak().run()}
         />
         <RibbonButton
-          icon={ListTree}
+          icon={ICON.outline}
           label="Table of contents"
           large
           onClick={() => chain().insertTableOfContents().run()}
@@ -1566,7 +1501,7 @@ function InsertTab({
             />
           )}
         >
-          <TableIcon size={22} strokeWidth={1.75} aria-hidden="true" />
+          <AppIcon icon={ICON.table} size="lg" />
           <span className="bs-rb-label">Table</span>
         </DropButton>
       </RibbonGroup>
@@ -1587,7 +1522,7 @@ function InsertTab({
             />
           )}
         >
-          <ImageIcon size={22} strokeWidth={1.75} aria-hidden="true" />
+          <AppIcon icon={ICON.picture} size="lg" />
           <span className="bs-rb-label">Picture</span>
         </DropButton>
       </RibbonGroup>
@@ -1602,7 +1537,7 @@ function InsertTab({
           active={editor.isActive("link")}
           panel={(close) => <LinkForm editor={editor} onDone={close} />}
         >
-          <LinkIcon size={22} strokeWidth={1.75} aria-hidden="true" />
+          <AppIcon icon={ICON.link} size="lg" />
           <span className="bs-rb-label">Link</span>
         </DropButton>
       </RibbonGroup>
@@ -1610,19 +1545,19 @@ function InsertTab({
       <RibbonGroup label="Text">
         <div className="bs-rstack">
           <RibbonButton
-            icon={Minus}
+            icon={ICON.horizontalLine}
             label="Horizontal line"
             showLabel
             onClick={() => chain().setHorizontalRule().run()}
           />
           <RibbonButton
-            icon={Quote}
+            icon={ICON.quote}
             label="Quote"
             showLabel
             onClick={() => chain().toggleBlockquote().run()}
           />
           <RibbonButton
-            icon={Code}
+            icon={ICON.codeBlock}
             label="Code block"
             showLabel
             onClick={() => chain().toggleCodeBlock().run()}
@@ -1646,7 +1581,7 @@ function InsertTab({
             ))
           }
         >
-          <CalendarDays size={22} strokeWidth={1.75} aria-hidden="true" />
+          <AppIcon icon={ICON.dateAndTime} size="lg" />
           <span className="bs-rb-label">Date &amp; Time</span>
         </DropButton>
       </RibbonGroup>
@@ -1677,7 +1612,7 @@ function InsertTab({
             </div>
           )}
         >
-          <Sigma size={22} strokeWidth={1.75} aria-hidden="true" />
+          <AppIcon icon={ICON.symbol} size="lg" />
           <span className="bs-rb-label">Symbol</span>
         </DropButton>
       </RibbonGroup>
@@ -1782,7 +1717,7 @@ function PictureForm({
         disabled={reading}
         onClick={() => fileRef.current?.click()}
       >
-        <Upload size={14} strokeWidth={1.75} aria-hidden="true" />
+        <AppIcon icon={ICON.upload} size="sm" />
         {reading ? "Putting it in…" : "From this device…"}
       </button>
       <p className="bs-rform-note">
@@ -1943,14 +1878,14 @@ function ViewTab({
     <>
       <RibbonGroup label="Views">
         <RibbonButton
-          icon={FileText}
+          icon={ICON.printLayout}
           label="Print layout"
           large
           active={view.layout === "print"}
           onClick={() => onViewChange({ ...view, layout: "print" })}
         />
         <RibbonButton
-          icon={Columns3}
+          icon={ICON.webLayout}
           label="Web layout"
           large
           active={view.layout === "web"}
@@ -1961,7 +1896,7 @@ function ViewTab({
       {outline ? (
         <RibbonGroup label="Show">
           <RibbonButton
-            icon={ListTree}
+            icon={ICON.outline}
             label="Outline"
             large
             active={outline.shown}
@@ -1972,28 +1907,28 @@ function ViewTab({
 
       <RibbonGroup label="Zoom">
         <RibbonButton
-          icon={ZoomOut}
+          icon={ICON.zoomOut}
           label="Zoom out"
           large
           disabled={zoom <= 50}
           onClick={() => zoomTo(zoom - ZOOM_STEP)}
         />
         <RibbonButton
-          icon={SquareSplitHorizontal}
+          icon={ICON.actualSize}
           label="100%"
           large
           active={view.zoom === 100}
           onClick={() => zoomTo(100)}
         />
         <RibbonButton
-          icon={MoveHorizontal}
+          icon={ICON.pageWidth}
           label="Page width"
           large
           active={view.zoom === "page-width"}
           onClick={() => onViewChange({ ...view, zoom: "page-width" })}
         />
         <RibbonButton
-          icon={ZoomIn}
+          icon={ICON.zoomIn}
           label="Zoom in"
           large
           disabled={zoom >= 200}
@@ -2003,7 +1938,7 @@ function ViewTab({
 
       <RibbonGroup label="Print">
         <RibbonButton
-          icon={Printer}
+          icon={ICON.print}
           label="Print"
           shortcut="Ctrl+P"
           large
@@ -2014,7 +1949,7 @@ function ViewTab({
       {onShortcuts ? (
         <RibbonGroup label="Help">
           <RibbonButton
-            icon={Keyboard}
+            icon={ICON.shortcuts}
             label="Keyboard shortcuts"
             shortcut="Ctrl+/"
             large
@@ -2036,13 +1971,13 @@ function TableTab({ editor, format }: { editor: Editor; format: FormatState }) {
       <RibbonGroup label="Rows & columns">
         <div className="bs-rstack">
           <RibbonButton
-            icon={Rows3}
+            icon={ICON.insertRow}
             label="Insert row above"
             showLabel
             onClick={() => chain().addRowBefore().run()}
           />
           <RibbonButton
-            icon={Rows3}
+            icon={ICON.insertRow}
             label="Insert row below"
             showLabel
             onClick={() => chain().addRowAfter().run()}
@@ -2050,13 +1985,13 @@ function TableTab({ editor, format }: { editor: Editor; format: FormatState }) {
         </div>
         <div className="bs-rstack">
           <RibbonButton
-            icon={Columns3}
+            icon={ICON.insertColumn}
             label="Insert column left"
             showLabel
             onClick={() => chain().addColumnBefore().run()}
           />
           <RibbonButton
-            icon={Columns3}
+            icon={ICON.insertColumn}
             label="Insert column right"
             showLabel
             onClick={() => chain().addColumnAfter().run()}
@@ -2067,14 +2002,14 @@ function TableTab({ editor, format }: { editor: Editor; format: FormatState }) {
       <RibbonGroup label="Merge">
         <div className="bs-rstack">
           <RibbonButton
-            icon={TableCellsMerge}
+            icon={ICON.mergeCells}
             label="Merge cells"
             showLabel
             disabled={!format.canMergeCells}
             onClick={() => chain().mergeCells().run()}
           />
           <RibbonButton
-            icon={TableCellsSplit}
+            icon={ICON.splitCells}
             label="Split cell"
             showLabel
             disabled={!format.canSplitCell}
@@ -2085,7 +2020,7 @@ function TableTab({ editor, format }: { editor: Editor; format: FormatState }) {
 
       <RibbonGroup label="Header">
         <RibbonButton
-          icon={TableIcon}
+          icon={ICON.table}
           label="Header row"
           large
           onClick={() => chain().toggleHeaderRow().run()}
@@ -2097,7 +2032,7 @@ function TableTab({ editor, format }: { editor: Editor; format: FormatState }) {
       <RibbonGroup label="Shading">
         <ColorDrop
           label="Shading"
-          icon={PaintBucket}
+          icon={ICON.shading}
           current={format.cellShading}
           colors={SHADING_COLORS}
           noneLabel="No color"
@@ -2110,19 +2045,19 @@ function TableTab({ editor, format }: { editor: Editor; format: FormatState }) {
       <RibbonGroup label="Delete">
         <div className="bs-rstack">
           <RibbonButton
-            icon={Trash2}
+            icon={ICON.delete}
             label="Delete row"
             showLabel
             onClick={() => chain().deleteRow().run()}
           />
           <RibbonButton
-            icon={Trash2}
+            icon={ICON.delete}
             label="Delete column"
             showLabel
             onClick={() => chain().deleteColumn().run()}
           />
           <RibbonButton
-            icon={Trash2}
+            icon={ICON.delete}
             label="Delete table"
             showLabel
             onClick={() => chain().deleteTable().run()}
@@ -2151,9 +2086,9 @@ export const PICTURE_SIZES = [
 ] as const;
 
 const PICTURE_ALIGNS = [
-  { align: "left", label: "Align left", icon: AlignLeft },
-  { align: "center", label: "Center", icon: AlignCenter },
-  { align: "right", label: "Align right", icon: AlignRight },
+  { align: "left", label: "Align left", icon: ICON.alignLeft },
+  { align: "center", label: "Center", icon: ICON.alignCenter },
+  { align: "right", label: "Align right", icon: ICON.alignRight },
 ] as const;
 
 function PictureTab({
@@ -2181,7 +2116,7 @@ function PictureTab({
           {PICTURE_SIZES.slice(0, 2).map((size) => (
             <RibbonButton
               key={size.label}
-              icon={Scaling}
+              icon={ICON.pictureSize}
               label={size.label}
               showLabel
               active={format.pictureWidth === size.width}
@@ -2193,7 +2128,7 @@ function PictureTab({
           {PICTURE_SIZES.slice(2).map((size) => (
             <RibbonButton
               key={size.label}
-              icon={Scaling}
+              icon={ICON.pictureSize}
               label={size.label}
               showLabel
               active={format.pictureWidth === size.width}
@@ -2202,7 +2137,7 @@ function PictureTab({
           ))}
         </div>
         <RibbonButton
-          icon={RotateCcw}
+          icon={ICON.originalSize}
           label="Original size"
           large
           active={format.pictureWidth === null}
@@ -2253,14 +2188,14 @@ function PictureTab({
             />
           )}
         >
-          <MessageSquareText size={22} strokeWidth={1.75} aria-hidden="true" />
+          <AppIcon icon={ICON.altText} size="lg" />
           <span className="bs-rb-label">Alt text</span>
         </DropButton>
       </RibbonGroup>
 
       <RibbonGroup label="Delete">
         <RibbonButton
-          icon={ImageMinus}
+          icon={ICON.removePicture}
           label="Remove picture"
           large
           onClick={() => editor.chain().focus().deleteSelection().run()}

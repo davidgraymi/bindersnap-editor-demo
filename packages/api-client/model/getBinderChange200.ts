@@ -6,16 +6,19 @@
  */
 import type { GetBinderChange200ApprovalRulesItem } from './getBinderChange200ApprovalRulesItem.ts';
 import type { GetBinderChange200Change } from './getBinderChange200Change.ts';
+import type { GetBinderChange200CoEditorsItem } from './getBinderChange200CoEditorsItem.ts';
 import type { GetBinderChange200DocumentsItem } from './getBinderChange200DocumentsItem.ts';
 import type { GetBinderChange200Outcome } from './getBinderChange200Outcome.ts';
 import type { GetBinderChange200RemovedDocumentsItem } from './getBinderChange200RemovedDocumentsItem.ts';
 import type { GetBinderChange200RequiredReviewers } from './getBinderChange200RequiredReviewers.ts';
+import type { GetBinderChange200SignOffChange } from './getBinderChange200SignOffChange.ts';
 import type { GetBinderChange200Viewer } from './getBinderChange200Viewer.ts';
 
 export type GetBinderChange200 = {
   organization: string;
   workspace: string;
   change: GetBinderChange200Change;
+  coEditors: GetBinderChange200CoEditorsItem[];
   /** @nullable */
   branchLabel: string | null;
   documents: GetBinderChange200DocumentsItem[];
@@ -28,6 +31,8 @@ export type GetBinderChange200 = {
   requiredReviewers: GetBinderChange200RequiredReviewers;
   viewer: GetBinderChange200Viewer;
   approvalRules: GetBinderChange200ApprovalRulesItem[];
+  /** @nullable */
+  signOffChange: GetBinderChange200SignOffChange;
   /** @nullable */
   outcome: GetBinderChange200Outcome;
   /** @nullable */

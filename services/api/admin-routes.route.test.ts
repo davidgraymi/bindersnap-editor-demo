@@ -198,6 +198,11 @@ test("the signups report answers a site admin", async () => {
       bySite: expect.any(Array),
       byCampaign: expect.any(Array),
       recent: expect.any(Array),
+      resourceRequests: {
+        people: 0,
+        byResource: [],
+        recent: [],
+      },
     });
   } finally {
     server.stop(true);

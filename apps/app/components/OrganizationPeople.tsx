@@ -1,3 +1,4 @@
+import { HelpLink } from "./HelpLink";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { useIsReadOnly } from "../readOnlyContext";
@@ -31,10 +32,11 @@ import {
   slugifyGroupName,
 } from "../../../packages/utils/groupName";
 import { PersonAvatar } from "./PersonAvatar";
+import { routeToPath } from "../routes";
+import { followInApp } from "../appLink";
 import { describePlanPrice } from "./PlanOffer";
-import { ChevronRight, X } from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 
-import { AppIcon } from "./AppIcon";
 import { OrganizationInvitations } from "./OrganizationInvitations";
 import { SettingsGroup } from "./SettingsGroup";
 import { SkeletonPanel } from "./Skeleton";
@@ -132,7 +134,10 @@ export function OrganizationPeople({ org }: OrganizationPeopleProps) {
           {seats.summary} Owners, and anyone in a group that edits or
           administers a binder, are paid seats
           {seats.unit ? ` at ${seats.unit}` : ""}, counted once. Reviewers and
-          readers are free.
+          readers are free.{" "}
+          <HelpLink guide="people" section="Who costs a seat">
+            Who costs a seat
+          </HelpLink>
         </p>
       ) : null}
 
@@ -371,7 +376,7 @@ function OrgPersonRow({
                 title={`Remove ${name} from ${orgName}`}
                 onClick={() => setConfirming("remove")}
               >
-                <AppIcon icon={X} size="sm" />
+                <AppIcon icon={ICON.close} size="sm" />
               </button>
             ) : (
               <span className="bs-rowact-slot" aria-hidden="true" />
@@ -570,11 +575,7 @@ function OrganizationGroups({
                     onClick={() => setOpen(expanded ? null : group.name)}
                   >
                     <span className="bs-row-icon org-group-chevron">
-                      <ChevronRight
-                        size={16}
-                        strokeWidth={1.75}
-                        aria-hidden="true"
-                      />
+                      <AppIcon icon={ICON.chevronRight} size="md" />
                     </span>
                     <span className="bs-row-body">
                       <span className="bs-row-name">
@@ -597,6 +598,36 @@ function OrganizationGroups({
                     </span>
                   </button>
 
+                  {expanded ? (
+                    <p className="org-group-page">
+                      <a
+                        href={routeToPath({
+                          kind: "organization",
+                          org,
+                          tab: "people",
+                          group: group.name,
+                        })}
+                        onClick={(event) =>
+                          followInApp(event, () => {
+                            window.history.pushState(
+                              {},
+                              "",
+                              routeToPath({
+                                kind: "organization",
+                                org,
+                                tab: "people",
+                                group: group.name,
+                              }),
+                            );
+                            window.dispatchEvent(new PopStateEvent("popstate"));
+                          })
+                        }
+                      >
+                        Where {describeGroupName(group.name)} signs off, and its
+                        page →
+                      </a>
+                    </p>
+                  ) : null}
                   {expanded ? (
                     <GroupDetail
                       group={group}
@@ -737,7 +768,7 @@ function GroupDetail({
                     aria-label={`Remove ${member.fullName || member.login} from ${describeGroupName(group.name)}`}
                     onClick={() => onRemove(member.login)}
                   >
-                    <X size={12} strokeWidth={2} aria-hidden="true" />
+                    <AppIcon icon={ICON.close} size="xs" heavy />
                   </button>
                 ) : null}
               </span>
@@ -809,7 +840,7 @@ function GroupDetail({
                     aria-label={`Take ${describeGroupName(group.name)} off ${binder}`}
                     onClick={() => onRemoveBinder(binder)}
                   >
-                    <X size={12} strokeWidth={2} aria-hidden="true" />
+                    <AppIcon icon={ICON.close} size="xs" heavy />
                   </button>
                 ) : null}
               </span>

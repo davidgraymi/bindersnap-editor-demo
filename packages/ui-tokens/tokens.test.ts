@@ -107,6 +107,8 @@ const SOURCE_FILES = [
   ...walk(join(REPO_ROOT, "apps/app"), [".css", ".html", ".ts", ".tsx"]),
   ...walk(join(REPO_ROOT, "apps/site"), [".css", ".html", ".ts", ".tsx"]),
   ...walk(join(REPO_ROOT, "packages/editor"), [".css", ".tsx", ".ts"]),
+  // AppIcon: the icon size and weight tokens are read here.
+  join(REPO_ROOT, "packages/ui-tokens/icons.tsx"),
   TOKENS_CSS_PATH,
 ];
 

@@ -1,21 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import {
-  Archive,
-  ArchiveRestore,
-  Check,
-  ChevronDown,
-  Columns2,
-  Download,
-  Eye,
-  FilePlus2,
-  FileText,
-  Folder,
-  Layers,
-} from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
+import { RULE_CHANGE_ANCHOR } from "./RuleChangeSection";
 
 import { downloadDocument } from "../api";
 import { followInApp } from "../appLink";
+import { formatDocumentName } from "../documentDisplay";
 import type { ChangeScope } from "../changeScope";
 import {
   describeChangedBadge,
@@ -28,6 +18,12 @@ import type { ComparisonSummary } from "../documentComparison";
 import { classifyDocumentFile } from "../documentFile";
 import { DocumentComparison, type ImageMode } from "./DocumentComparison";
 import { DocumentPreview } from "./DocumentPreview";
+import { PassageComments } from "./PassageComments";
+import { parseDocumentFilename } from "../../../packages/utils/documentPath";
+import type {
+  DiscussionAnchor,
+  DiscussionThread,
+} from "../../../packages/api-schema/schemas/documents";
 import { ChangeByline } from "./ChangeByline";
 
 /**
@@ -57,6 +53,14 @@ import { ChangeByline } from "./ChangeByline";
  */
 
 interface ChangeComparisonPageProps {
+  /**
+   * What the change does to who signs off, drawn first, above every
+   * document, with its own entry at the top of the tree (4.11). Null when it
+   * leaves the rules alone.
+   */
+  ruleSection?: ReactNode;
+  /** "1 rule", for the tree's entry. */
+  ruleCount?: string | null;
   org: string;
   binder: string;
   changeNumber: number;
@@ -98,7 +102,16 @@ interface ChangeComparisonPageProps {
   fileHref: (slugPath: string) => string;
   /** Open one document's proposed file on its own screen. */
   onReadFile: (slugPath: string) => void;
+  /** Comments on passages of the documents; absent, there are none. */
+  passages?: PassageCommenting | null;
   onDownload: (row: ChangedDocumentRow, gitRef: string) => void;
+  /**
+   * Back into the words, in this change: set for the documents its author can
+   * still edit in the editor. A reviewer's "please reword step 3" is answered
+   * here, where the author reads the diff, not in a second change. Returns
+   * null for a document that cannot be edited there.
+   */
+  editFor?: ((row: ChangedDocumentRow) => (() => void) | null) | null;
   /**
    * Whether it is still open, or how it ended — the badge before the line
    * under the title.
@@ -146,27 +159,20 @@ function isText(value: unknown): value is string {
 }
 
 function KindIcon({ kind }: { kind: ChangedDocumentRow["kind"] }) {
-  const size = 14;
-  const strokeWidth = 1.6;
-  if (kind === "added")
-    return (
-      <FilePlus2 size={size} strokeWidth={strokeWidth} aria-hidden="true" />
-    );
-  if (kind === "removed")
-    return <Archive size={size} strokeWidth={strokeWidth} aria-hidden="true" />;
-  if (kind === "restored")
-    return (
-      <ArchiveRestore
-        size={size}
-        strokeWidth={strokeWidth}
-        aria-hidden="true"
-      />
-    );
-  return <FileText size={size} strokeWidth={strokeWidth} aria-hidden="true" />;
+  if (kind === "added") return <AppIcon icon={ICON.newDocument} size="sm" />;
+  if (kind === "removed") return <AppIcon icon={ICON.archive} size="sm" />;
+  if (kind === "restored") return <AppIcon icon={ICON.restore} size="sm" />;
+  return <AppIcon icon={ICON.document} size="sm" />;
 }
 
 /**
- * `+112 −8`, drawn the way every diff draws it, or nothing.
+ * How much a document changed, or nothing.
+ *
+ * **In words on the document's own bar** — "76 words added · 3 removed" —
+ * and as `+76 −3` only in the tree, where there is room for nothing longer.
+ * The bar said `+76 −0` in monospace, which is how a code review counts lines
+ * and reads as arithmetic to anyone who has not sat through one. A side with
+ * nothing in it is left out: "0 removed" is a word about nothing.
  *
  * Nothing until that document's comparison has been read, and nothing for one
  * whose words did not move: a rename says what it did in its path, and a
@@ -174,35 +180,67 @@ function KindIcon({ kind }: { kind: ChangedDocumentRow["kind"] }) {
  */
 function WordCounts({
   summary,
+  spelled = false,
 }: {
   summary: ComparisonSummary | null | undefined;
+  /** Said in words, for the document's own bar. */
+  spelled?: boolean;
 }) {
   if (!summary || summary.identical) return null;
   // Same words, different look: a count of +0 −0 would read as nothing.
   if (summary.restyled) {
     return <span className="cmp-counts cmp-counts-note">Formatting</span>;
   }
-  const words = summary.additions + summary.deletions > 0;
-  const pictures = (count: number) =>
-    `${count} ${count === 1 ? "picture" : "pictures"}`;
-  const said = [
-    words
-      ? `${summary.additions} words added, ${summary.deletions} removed`
-      : null,
-    summary.picturesAdded > 0
-      ? `${pictures(summary.picturesAdded)} added`
-      : null,
-    summary.picturesRemoved > 0
-      ? `${pictures(summary.picturesRemoved)} removed`
-      : null,
+  const count = (amount: number, one: string, many: string) =>
+    `${amount} ${amount === 1 ? one : many}`;
+  const pictures = (amount: number) => count(amount, "picture", "pictures");
+  const added = [
+    summary.additions > 0 ? count(summary.additions, "word", "words") : null,
+    summary.picturesAdded > 0 ? pictures(summary.picturesAdded) : null,
   ].filter(Boolean);
+  const removed = [
+    summary.deletions > 0 ? count(summary.deletions, "word", "words") : null,
+    summary.picturesRemoved > 0 ? pictures(summary.picturesRemoved) : null,
+  ].filter(Boolean);
+  if (added.length === 0 && removed.length === 0) return null;
+
+  const addedSaid = added.length > 0 ? `${added.join(" and ")} added` : "";
+  // "3 removed" after "76 words added"; "3 words removed" on its own.
+  const removedSaid =
+    removed.length === 0
+      ? ""
+      : added.length > 0 && summary.picturesRemoved === 0
+        ? `${summary.deletions} removed`
+        : `${removed.join(" and ")} removed`;
+  const said = [
+    addedSaid,
+    removed.length > 0 ? `${removed.join(" and ")} removed` : "",
+  ]
+    .filter(Boolean)
+    .join(", ");
+
+  if (spelled) {
+    return (
+      <span className="cmp-counts cmp-counts--spelled" aria-label={said}>
+        {addedSaid ? <span className="cmp-counts-add">{addedSaid}</span> : null}
+        {addedSaid && removedSaid ? (
+          <span className="cmp-counts-sep" aria-hidden="true">
+            ·
+          </span>
+        ) : null}
+        {removedSaid ? (
+          <span className="cmp-counts-del">{removedSaid}</span>
+        ) : null}
+      </span>
+    );
+  }
   return (
-    <span className="cmp-counts" aria-label={said.join(", ")}>
-      {words ? (
-        <>
-          <span className="cmp-counts-add">+{summary.additions}</span>
-          <span className="cmp-counts-del">−{summary.deletions}</span>
-        </>
+    <span className="cmp-counts" aria-label={said}>
+      {summary.additions > 0 ? (
+        <span className="cmp-counts-add">+{summary.additions}</span>
+      ) : null}
+      {summary.deletions > 0 ? (
+        <span className="cmp-counts-del">−{summary.deletions}</span>
       ) : null}
       {summary.picturesAdded > 0 ? (
         <span className="cmp-counts-add">
@@ -242,6 +280,8 @@ function groupByFolder(rows: readonly ChangedDocumentRow[]) {
 }
 
 export function ChangeComparisonPage({
+  ruleSection = null,
+  ruleCount = null,
   org,
   binder,
   changeNumber,
@@ -259,6 +299,8 @@ export function ChangeComparisonPage({
   fileHref,
   onReadFile,
   onDownload,
+  passages = null,
+  editFor = null,
   status = null,
   tabs = null,
 }: ChangeComparisonPageProps) {
@@ -568,6 +610,7 @@ export function ChangeComparisonPage({
               onOpenBranch={onOpenBranch}
               openedAt={openedAt}
               nameOf={nameOf}
+              changesRules={ruleSection !== null}
             />
           ) : null}
           {/* Nothing to size is not a size. The states below say what this
@@ -589,11 +632,9 @@ export function ChangeComparisonPage({
       <article className="change-compare">
         <div className="change-main">
           {header}
-          <p className="bs-note">
-            This change versions no document — it changes the binder's sign-off
-            rules, which publishes nothing. The change itself says what it would
-            do to them.
-          </p>
+          {ruleSection ?? (
+            <p className="bs-note">This change versions no document.</p>
+          )}
         </div>
       </article>
     );
@@ -618,12 +659,14 @@ export function ChangeComparisonPage({
       {header}
 
       <div
-        className={`cmp-layout${rows.length > 1 ? " cmp-layout--tree" : ""}`}
+        className={`cmp-layout${
+          rows.length > 1 || ruleSection ? " cmp-layout--tree" : ""
+        }`}
       >
         {/* The tree: only what changed, folder by folder, each one a click
             away. One document is not a list, and a tree pointing at a single
             entry is furniture — the same rule the grammar states for rails. */}
-        {rows.length > 1 ? (
+        {rows.length > 1 || ruleSection ? (
           <aside className="bs-rail cmp-tree">
             <nav className="bs-panel" aria-label="Documents in this change">
               <div className="bs-panel-bar">
@@ -649,15 +692,38 @@ export function ChangeComparisonPage({
               </div>
 
               <ol className="cmp-tree-list">
+                {ruleSection ? (
+                  <li>
+                    <ol className="bs-row-list">
+                      <li>
+                        <button
+                          className="bs-row"
+                          type="button"
+                          onClick={() =>
+                            document
+                              .getElementById(RULE_CHANGE_ANCHOR)
+                              ?.scrollIntoView({ block: "start" })
+                          }
+                        >
+                          <span className="bs-row-icon">
+                            <AppIcon icon={ICON.rules} size="sm" />
+                          </span>
+                          <span className="bs-row-body">
+                            <span className="bs-row-name">Who signs off</span>
+                          </span>
+                          {ruleCount ? (
+                            <span className="bs-row-meta">{ruleCount}</span>
+                          ) : null}
+                        </button>
+                      </li>
+                    </ol>
+                  </li>
+                ) : null}
                 {groups.map((group) => (
                   <li key={group.folder || "(top)"}>
                     {group.folder ? (
                       <span className="cmp-tree-folder">
-                        <Folder
-                          size={13}
-                          strokeWidth={1.6}
-                          aria-hidden="true"
-                        />
+                        <AppIcon icon={ICON.folder} size="sm" />
                         {group.folder}
                       </span>
                     ) : null}
@@ -680,10 +746,10 @@ export function ChangeComparisonPage({
                                 className={`bs-row-icon cmp-rail-icon--${row.kind}`}
                               >
                                 {isRead ? (
-                                  <Check
-                                    size={14}
-                                    strokeWidth={2}
-                                    aria-hidden="true"
+                                  <AppIcon
+                                    icon={ICON.selected}
+                                    size="sm"
+                                    heavy
                                   />
                                 ) : (
                                   <KindIcon kind={row.kind} />
@@ -706,11 +772,13 @@ export function ChangeComparisonPage({
         ) : null}
 
         <div className="cmp-stream" ref={streamRef}>
+          {ruleSection}
           {rows.map((row) => (
             <ChangedDocumentSection
               key={row.anchor}
               org={org}
               binder={binder}
+              passages={passages}
               row={row}
               headRef={headRef}
               open={open}
@@ -738,6 +806,7 @@ export function ChangeComparisonPage({
               fileHref={fileHref(row.slugPath)}
               onReadFile={() => onReadFile(row.slugPath)}
               onDownload={(gitRef) => onDownload(row, gitRef)}
+              onEdit={editFor ? editFor(row) : null}
             />
           ))}
         </div>
@@ -749,6 +818,7 @@ export function ChangeComparisonPage({
 interface ChangedDocumentSectionProps {
   org: string;
   binder: string;
+  passages: PassageCommenting | null;
   row: ChangedDocumentRow;
   headRef: string;
   open: boolean;
@@ -767,28 +837,53 @@ interface ChangedDocumentSectionProps {
   fileHref: string;
   onReadFile: () => void;
   onDownload: (gitRef: string) => void;
+  /** Open it in the editor, in this change; null when it cannot be. */
+  onEdit: (() => void) | null;
 }
 
 /**
- * The document's address, as the bar draws it — and, when the change moves
- * or renames it, both addresses: the old one struck out in red and the new
- * one in green, the way a diff draws any other line that changed. A sentence
+ * Where a document is and what it is called, as a person says it:
+ * "Finance / Expenses Policy" for `finance/expenses-policy`. The same words
+ * its own page's trail uses.
+ */
+export function describeDocumentPath(slugPath: string): string {
+  return slugPath
+    .split("/")
+    .filter(Boolean)
+    .map(formatDocumentName)
+    .join(" / ");
+}
+
+/**
+ * Where the document is, as the bar draws it — and, when the change moves
+ * or renames it, both places: the old one struck out in red and the new one
+ * in green, the way a diff draws any other line that changed. A sentence
  * saying "Moved from Nursing" under the bar was one more line to read to
  * learn what the path itself can show.
+ *
+ * **Names, not the address.** It read `finance/expenses-policy` in
+ * monospace, which is the file's address in the URL and nothing the person
+ * reviewing it ever typed or was shown anywhere else.
  */
 function FilePath({ row }: { row: ChangedDocumentRow }): ReactNode {
   if (!row.previousSlugPath) {
-    return <span className="cmp-file-path">{row.slugPath}</span>;
+    return (
+      <span className="cmp-file-path">
+        {describeDocumentPath(row.slugPath)}
+      </span>
+    );
   }
   return (
     <>
       <del className="cmp-file-path cmp-file-path--old">
-        {row.previousSlugPath}
+        {describeDocumentPath(row.previousSlugPath)}
       </del>
       <span className="cmp-file-path-arrow" aria-hidden="true">
         →
       </span>
-      <ins className="cmp-file-path cmp-file-path--new">{row.slugPath}</ins>
+      <ins className="cmp-file-path cmp-file-path--new">
+        {describeDocumentPath(row.slugPath)}
+      </ins>
       {/* A strike-through is invisible to a screen reader. */}
       {row.move ? <span className="sr-only">{row.move}</span> : null}
     </>
@@ -805,9 +900,34 @@ function FilePath({ row }: { row: ChangedDocumentRow }): ReactNode {
  * file on the branch at all; what it has is a last version on record, and the
  * honest thing to show is what is coming off.
  */
+/**
+ * Commenting on a passage of a document, for the screen that draws them.
+ * Absent, the documents are read without it (a test, or a page with no
+ * discussion to add to).
+ */
+export interface PassageCommenting {
+  threads: readonly DiscussionThread[];
+  canComment: boolean;
+  onComment: (anchor: DiscussionAnchor, body: string) => Promise<void>;
+  threadHref: (threadId: string) => string;
+}
+
+/**
+ * What a comment calls the document it is on: its identity, which a rename
+ * or a move does not change (ADR 0005), or its address when it has none.
+ */
+export function passageDocumentKey(row: {
+  path: string;
+  slugPath: string;
+}): string {
+  const file = (row.path || row.slugPath).split("/").pop() ?? "";
+  return parseDocumentFilename(file).uid ?? row.slugPath;
+}
+
 function ChangedDocumentSection({
   org,
   binder,
+  passages,
   row,
   headRef,
   open,
@@ -824,6 +944,7 @@ function ChangedDocumentSection({
   fileHref,
   onReadFile,
   onDownload,
+  onEdit,
 }: ChangedDocumentSectionProps) {
   /**
    * **The file path, which carries the identity — not the address.**
@@ -840,6 +961,23 @@ function ChangedDocumentSection({
     () => ({ org, binder, documentPath: row.path || row.slugPath }),
     [org, binder, row.path, row.slugPath],
   );
+
+  // Select words in the document to comment on them: `PassageComments`.
+  const commentable = (page: ReactNode) =>
+    passages ? (
+      <PassageComments
+        documentKey={passageDocumentKey(row)}
+        documentLabel={formatDocumentName(row.name)}
+        threads={passages.threads}
+        canComment={passages.canComment}
+        onComment={passages.onComment}
+        threadHref={passages.threadHref}
+      >
+        {page}
+      </PassageComments>
+    ) : (
+      page
+    );
 
   // Stable per document, so the preview loads its file once rather than once
   // per render — the note on `DocumentPreview.loadFile` says what it costs.
@@ -883,11 +1021,10 @@ function ChangedDocumentSection({
             aria-controls={`${row.anchor}-body`}
             onClick={onToggle}
           >
-            <ChevronDown
+            <AppIcon
+              icon={ICON.chevronDown}
+              size="md"
               className={collapsed ? "cmp-file-chevron--shut" : undefined}
-              size={16}
-              strokeWidth={1.75}
-              aria-hidden="true"
             />
             <span className="sr-only">
               {collapsed ? `Show ${row.name}` : `Hide ${row.name}`}
@@ -899,7 +1036,7 @@ function ChangedDocumentSection({
           <FilePath row={row} />
         </h2>
 
-        <WordCounts summary={summary} />
+        <WordCounts summary={summary} spelled />
 
         <span className="bs-row-meta cmp-file-step">{row.versionStep}</span>
 
@@ -924,7 +1061,7 @@ function ChangedDocumentSection({
               aria-pressed={imageMode === "side-by-side"}
               onClick={() => onImageMode("side-by-side")}
             >
-              <Columns2 size={13} strokeWidth={1.75} aria-hidden="true" />
+              <AppIcon icon={ICON.compareSideBySide} size="sm" />
               Side by side
             </button>
             <button
@@ -933,7 +1070,7 @@ function ChangedDocumentSection({
               aria-pressed={imageMode === "difference"}
               onClick={() => onImageMode("difference")}
             >
-              <Layers size={13} strokeWidth={1.75} aria-hidden="true" />
+              <AppIcon icon={ICON.compareInline} size="sm" />
               Difference
             </button>
           </span>
@@ -948,7 +1085,7 @@ function ChangedDocumentSection({
           aria-pressed={read}
           onClick={onToggleRead}
         >
-          <Check size={13} strokeWidth={2} aria-hidden="true" />
+          <AppIcon icon={ICON.selected} size="sm" heavy />
           Viewed
         </button>
 
@@ -960,7 +1097,7 @@ function ChangedDocumentSection({
             href={fileHref}
             onClick={(event) => followInApp(event, onReadFile)}
           >
-            <Eye size={14} strokeWidth={1.6} aria-hidden="true" />
+            <AppIcon icon={ICON.preview} size="sm" />
             View
           </a>
         )}
@@ -971,8 +1108,20 @@ function ChangedDocumentSection({
             type="button"
             onClick={() => onDownload(downloadRef)}
           >
-            <Download size={14} strokeWidth={1.6} aria-hidden="true" />
+            <AppIcon icon={ICON.download} size="sm" />
             Download
+          </button>
+        )}
+
+        {onEdit === null || row.kind === "removed" ? null : (
+          <button
+            className="bs-btn bs-btn--sm bs-btn-secondary cmp-file-act"
+            type="button"
+            aria-label={`Edit ${row.name}`}
+            onClick={onEdit}
+          >
+            <AppIcon icon={ICON.edit} size="sm" />
+            Edit
           </button>
         )}
       </header>
@@ -992,28 +1141,32 @@ function ChangedDocumentSection({
             // A placeholder with the section's own height, so collapsing and
             // scrolling do not make the page jump under the reader.
             <p className="cmp-file-waiting">Ready when you scroll to it.</p>
-          ) : row.base === null ? (
-            // New: nothing to read it against, so it is read whole. The badge
-            // in the bar already says why there is no diff.
-            <DocumentPreview
-              loadFile={loadFile}
-              gitRef={headRef}
-              fileName={row.fileName}
-              downloading={false}
-              onDownload={() => onDownload(headRef)}
-              bare
-            />
           ) : (
-            <DocumentComparison
-              scope={scope}
-              base={row.base}
-              headRef={headRef}
-              headLabel={open ? "This change" : "What it published"}
-              fileName={row.fileName}
-              imageMode={imageMode}
-              onDownload={onDownload}
-              onSummary={onSummary}
-            />
+            commentable(
+              row.base === null ? (
+                // New: nothing to read it against, so it is read whole. The
+                // badge in the bar already says why there is no diff.
+                <DocumentPreview
+                  loadFile={loadFile}
+                  gitRef={headRef}
+                  fileName={row.fileName}
+                  downloading={false}
+                  onDownload={() => onDownload(headRef)}
+                  bare
+                />
+              ) : (
+                <DocumentComparison
+                  scope={scope}
+                  base={row.base}
+                  headRef={headRef}
+                  headLabel={open ? "This change" : "What it published"}
+                  fileName={row.fileName}
+                  imageMode={imageMode}
+                  onDownload={onDownload}
+                  onSummary={onSummary}
+                />
+              ),
+            )
           )}
         </div>
       )}

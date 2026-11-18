@@ -13,7 +13,7 @@ import type { Editor, JSONContent } from "@tiptap/core";
 import { TextSelection } from "@tiptap/pm/state";
 import { EditorContent, useEditor, useEditorState } from "@tiptap/react";
 import Placeholder from "@tiptap/extension-placeholder";
-import { FileText, Columns3, Minus, Plus } from "lucide-react";
+import { AppIcon, ICON } from "../ui-tokens/icons";
 
 import { sanitizeProseMirrorJson } from "../utils/sanitizer";
 import { EMPTY_DOCUMENT, documentContentExtensions } from "./documentSchema";
@@ -894,7 +894,7 @@ function StatusBar({
             title="Print layout"
             onClick={() => onViewChange({ ...view, layout: "print" })}
           >
-            <FileText size={14} strokeWidth={1.75} aria-hidden="true" />
+            <AppIcon icon={ICON.printLayout} size="sm" />
           </button>
           <button
             type="button"
@@ -904,7 +904,7 @@ function StatusBar({
             title="Web layout"
             onClick={() => onViewChange({ ...view, layout: "web" })}
           >
-            <Columns3 size={14} strokeWidth={1.75} aria-hidden="true" />
+            <AppIcon icon={ICON.webLayout} size="sm" />
           </button>
         </div>
         <div className="bs-doc-zoom">
@@ -916,7 +916,7 @@ function StatusBar({
             disabled={zoom <= ZOOM_MIN}
             onClick={() => zoomTo(zoom - ZOOM_STEP)}
           >
-            <Minus size={12} strokeWidth={2} aria-hidden="true" />
+            <AppIcon icon={ICON.zoomOut} size="sm" />
           </button>
           <input
             type="range"
@@ -937,7 +937,7 @@ function StatusBar({
             disabled={zoom >= ZOOM_MAX}
             onClick={() => zoomTo(zoom + ZOOM_STEP)}
           >
-            <Plus size={12} strokeWidth={2} aria-hidden="true" />
+            <AppIcon icon={ICON.zoomIn} size="sm" />
           </button>
           <button
             type="button"

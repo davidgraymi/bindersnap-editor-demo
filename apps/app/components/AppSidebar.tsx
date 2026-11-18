@@ -1,24 +1,6 @@
+import { guideForRoute, guideTitle, helpHref } from "../helpLinks";
 import { useQuery } from "@tanstack/react-query";
-import {
-  ArrowLeft,
-  Building2,
-  ChevronDown,
-  ChevronRight,
-  CircleHelp,
-  CreditCard,
-  FileText,
-  FilePen,
-  PencilLine,
-  History,
-  Home,
-  Library,
-  MessageSquarePlus,
-  PanelLeftClose,
-  PanelLeftOpen,
-  Plus,
-  Settings,
-  Users,
-} from "lucide-react";
+import { AppIcon, ICON, type IconGlyph } from "./AppIcon";
 
 import type { BinderTab } from "../binderShell";
 import type { DocumentRefView } from "../documentRefs";
@@ -31,7 +13,6 @@ import { organizationBindersQuery, organizationsQuery } from "../data/queries";
 import { routeToPath, type AppRoute, type OrganizationTab } from "../routes";
 import type { WorkspaceDocumentListEntry } from "../../../packages/api-schema/schemas/workspaces";
 import { useOrganizationDisplayName } from "../useOrganizationDisplayName";
-import { siteUrl } from "../siteLink";
 
 /**
  * The map of the product, always on screen.
@@ -138,6 +119,8 @@ export interface SidebarBinderContents {
   folders: readonly string[];
   /** The one being read, so its row is marked. */
   active: string | null;
+  /** The folder whose page is open, so its row is marked. */
+  activeFolder?: string | null;
   /**
    * The ref these contents were read at, so a row leads somewhere that exists.
    *
@@ -193,7 +176,7 @@ interface AppSidebarProps {
 type Entry = {
   key: string;
   label: string;
-  icon: typeof Home;
+  icon: IconGlyph;
   route: AppRoute | null;
   isActive: (route: AppRoute) => boolean;
   count?: number | null;
@@ -213,6 +196,13 @@ export function AppSidebar({
   onToggleCollapsed,
   onNavigate,
 }: AppSidebarProps) {
+  // Help opens the guide about the page on screen — "Reviewing a change"
+  // from a change request — and the list of every guide from anywhere else.
+  // Each guide's page lists the others beside it.
+  const helpGuide = guideForRoute(route, window.location.search);
+  const helpLabel = helpGuide
+    ? `Help: ${guideTitle(helpGuide)}`
+    : "Help and guides";
   // The org-scoped entries have nowhere to point until we know which
   // organization is on screen. Rendered muted and inert rather than hidden:
   // a map that changes shape as you walk around it is not a map.
@@ -236,14 +226,14 @@ export function AppSidebar({
     {
       key: "home",
       label: "Home",
-      icon: Home,
+      icon: ICON.home,
       route: { kind: "workspace" },
       isActive: (r) => r.kind === "workspace" || r.kind === "home",
     },
     {
       key: "changes",
       label: "Change requests",
-      icon: FilePen,
+      icon: ICON.changeRequest,
       route: { kind: "changes" },
       isActive: (r) => r.kind === "changes",
       count: changeCount,
@@ -253,7 +243,7 @@ export function AppSidebar({
       // in a binder you moved on from, so it has a place to be found.
       key: "drafts",
       label: "Drafts",
-      icon: PencilLine,
+      icon: ICON.draft,
       route: { kind: "drafts" },
       isActive: (r) => r.kind === "drafts",
     },
@@ -262,7 +252,7 @@ export function AppSidebar({
       // people, and a list mixing every binder's files answered nothing.
       key: "binders",
       label: "Binders",
-      icon: Library,
+      icon: ICON.binder,
       route: { kind: "binders" },
       isActive: (r) => r.kind === "binders",
     },
@@ -292,7 +282,7 @@ export function AppSidebar({
         {
           key: "binder-documents",
           label: "Documents",
-          icon: FileText,
+          icon: ICON.document,
           route: { kind: "binder", org: scope.org, binder: scope.binder },
           // A policy open in the binder is one of its documents.
           isActive: (r) =>
@@ -304,7 +294,7 @@ export function AppSidebar({
           // called under Your work — GitLab's project sidebar says "Merge
           // requests" too, not a shorter word for the same thing.
           label: "Change requests",
-          icon: FilePen,
+          icon: ICON.changeRequest,
           route: {
             kind: "binder",
             org: scope.org,
@@ -317,7 +307,7 @@ export function AppSidebar({
         {
           key: "binder-drafts",
           label: "Drafts",
-          icon: PencilLine,
+          icon: ICON.draft,
           route: {
             kind: "binder",
             org: scope.org,
@@ -329,7 +319,7 @@ export function AppSidebar({
         {
           key: "binder-history",
           label: "History",
-          icon: History,
+          icon: ICON.history,
           route: {
             kind: "binder",
             org: scope.org,
@@ -341,7 +331,7 @@ export function AppSidebar({
         {
           key: "binder-settings",
           label: "Settings",
-          icon: Settings,
+          icon: ICON.settings,
           route: {
             kind: "binder",
             org: scope.org,
@@ -359,7 +349,7 @@ export function AppSidebar({
           ? BINDER_SETTINGS_PAGES.map((page): Entry => ({
               key: `binder-settings-${page.section}`,
               label: page.label,
-              icon: Settings,
+              icon: ICON.settings,
               sub: true,
               route: {
                 kind: "binder",
@@ -389,7 +379,7 @@ export function AppSidebar({
     {
       key: "binders",
       label: "Binders",
-      icon: Library,
+      icon: ICON.binder,
       route: orgRoute(),
       isActive: (r) => organizationTab(r) === "binders",
     },
@@ -398,7 +388,7 @@ export function AppSidebar({
       // level up, the way a GitLab group lists its projects' merge requests.
       key: "org-changes",
       label: "Change requests",
-      icon: FilePen,
+      icon: ICON.changeRequest,
       route: orgRoute("changes"),
       isActive: (r) => organizationTab(r) === "changes",
       count: orgOpenChanges,
@@ -406,21 +396,21 @@ export function AppSidebar({
     {
       key: "org-drafts",
       label: "Drafts",
-      icon: PencilLine,
+      icon: ICON.draft,
       route: orgRoute("drafts"),
       isActive: (r) => organizationTab(r) === "drafts",
     },
     {
       key: "people",
       label: "People & access",
-      icon: Users,
+      icon: ICON.people,
       route: orgRoute("people"),
       isActive: (r) => organizationTab(r) === "people",
     },
     {
       key: "billing",
       label: "Billing",
-      icon: CreditCard,
+      icon: ICON.billing,
       // This organization's billing, not the reader's oldest: billing is per
       // organization, and the entry sits under this one's name.
       route: org === null ? null : { kind: "billing", org },
@@ -429,7 +419,7 @@ export function AppSidebar({
     {
       key: "settings",
       label: "Settings",
-      icon: Settings,
+      icon: ICON.settings,
       route: orgRoute("settings"),
       isActive: (r) => organizationTab(r) === "settings",
     },
@@ -445,7 +435,7 @@ export function AppSidebar({
       ? organizations.map((organization): Entry => ({
           key: `org-${organization.name}`,
           label: organization.displayName || organization.name,
-          icon: Building2,
+          icon: ICON.organization,
           route: { kind: "organization", org: organization.name },
           isActive: () => false,
         }))
@@ -453,7 +443,7 @@ export function AppSidebar({
           {
             key: "new-organization",
             label: "New organization",
-            icon: Plus,
+            icon: ICON.add,
             route: { kind: "createOrganization" },
             isActive: (r) => r.kind === "createOrganization",
           },
@@ -488,9 +478,7 @@ export function AppSidebar({
           if (to) followInApp(event, () => onNavigate(to));
         }}
       >
-        {entry.sub ? null : (
-          <Icon size={16} strokeWidth={1.75} aria-hidden="true" />
-        )}
+        {entry.sub ? null : <AppIcon icon={Icon} size="md" />}
         <span className="app-sidebar-item-label">{entry.label}</span>
         {typeof entry.count === "number" && entry.count > 0 ? (
           <span className="app-sidebar-item-count">{entry.count}</span>
@@ -498,9 +486,9 @@ export function AppSidebar({
         {entry.expanded === undefined ? null : (
           <span className="app-sidebar-item-chevron" aria-hidden="true">
             {entry.expanded ? (
-              <ChevronDown size={14} strokeWidth={1.75} />
+              <AppIcon icon={ICON.chevronDown} size="sm" />
             ) : (
-              <ChevronRight size={14} strokeWidth={1.75} />
+              <AppIcon icon={ICON.chevronRight} size="sm" />
             )}
           </span>
         )}
@@ -530,7 +518,7 @@ export function AppSidebar({
               )
             }
           >
-            <ArrowLeft size={14} strokeWidth={1.75} aria-hidden="true" />
+            <AppIcon icon={ICON.back} size="sm" />
             <span className="app-sidebar-back-label">
               {orgName || scope.org}
             </span>
@@ -544,7 +532,7 @@ export function AppSidebar({
               heading and not a link: Documents is the way to its contents. */}
           <div className="app-sidebar-binder">
             <span className="app-sidebar-binder-mark" aria-hidden="true">
-              <Library size={14} strokeWidth={1.75} />
+              <AppIcon icon={ICON.binder} size="sm" />
             </span>
             <span className="app-sidebar-binder-name">{scope.name}</span>
           </div>
@@ -564,7 +552,7 @@ export function AppSidebar({
               followInApp(event, () => onNavigate({ kind: "workspace" }))
             }
           >
-            <ArrowLeft size={14} strokeWidth={1.75} aria-hidden="true" />
+            <AppIcon icon={ICON.back} size="sm" />
             <span className="app-sidebar-back-label">Home</span>
           </a>
 
@@ -572,7 +560,7 @@ export function AppSidebar({
 
           <div className="app-sidebar-scope">
             <span className="app-sidebar-scope-mark" aria-hidden="true">
-              <Building2 size={14} strokeWidth={1.75} />
+              <AppIcon icon={ICON.organization} size="sm" />
             </span>
             <span className="app-sidebar-scope-name">
               {orgName || orgScope}
@@ -609,14 +597,14 @@ export function AppSidebar({
               were doing it. */}
           <a
             className="app-sidebar-foot-item"
-            href={siteUrl("/help")}
+            href={helpHref(helpGuide ?? undefined)}
             target="_blank"
             rel="noopener"
-            aria-label="Help and guides (opens in a new tab)"
-            title={collapsed ? "Help and guides" : undefined}
+            aria-label={`${helpLabel} (opens in a new tab)`}
+            title={collapsed || helpGuide ? helpLabel : undefined}
           >
             <span className="app-sidebar-foot-icon" aria-hidden="true">
-              <CircleHelp size={16} strokeWidth={1.75} />
+              <AppIcon icon={ICON.help} size="md" />
             </span>
             <span className="app-sidebar-foot-label">Help and guides</span>
           </a>
@@ -628,7 +616,7 @@ export function AppSidebar({
               onClick={onSendFeedback}
             >
               <span className="app-sidebar-foot-icon" aria-hidden="true">
-                <MessageSquarePlus size={16} strokeWidth={1.75} />
+                <AppIcon icon={ICON.feedback} size="md" />
               </span>
               <span className="app-sidebar-foot-label">Send feedback</span>
             </button>
@@ -650,9 +638,9 @@ export function AppSidebar({
           onClick={onToggleCollapsed}
         >
           {collapsed ? (
-            <PanelLeftOpen size={15} strokeWidth={1.75} aria-hidden="true" />
+            <AppIcon icon={ICON.showPanel} size="md" />
           ) : (
-            <PanelLeftClose size={15} strokeWidth={1.75} aria-hidden="true" />
+            <AppIcon icon={ICON.hidePanel} size="md" />
           )}
         </button>
       </div>

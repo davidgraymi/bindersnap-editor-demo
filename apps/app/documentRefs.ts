@@ -107,7 +107,9 @@ export function buildReadableRefs(params: {
       draft: own.branch,
       label: own.name,
       detail: "Your draft — not proposed yet",
-      current: change === null && draft === own.branch,
+      // Read in the draft, or at its branch (`/-/blob/{draft}/…`): the same
+      // place, reached from the editor or from the explorer.
+      current: change === null && (draft === own.branch || ref === own.branch),
     });
   }
 

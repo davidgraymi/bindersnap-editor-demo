@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { FilePen, Library } from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 import { useMemo, useState } from "react";
 
 import type { WorkspaceSummary } from "../../../packages/api-schema/schemas/workspaces";
@@ -189,7 +189,7 @@ function BinderTile({
       >
         <span className="binders-tile-head">
           <span className="binders-tile-mark" aria-hidden="true">
-            <Library size={16} strokeWidth={1.75} />
+            <AppIcon icon={ICON.binder} size="md" />
           </span>
           <span className="binders-tile-name">
             {formatDocumentName(binder.name)}
@@ -203,7 +203,7 @@ function BinderTile({
         </span>
         <span className="binders-tile-facts">
           <span className="binders-tile-changes">
-            <FilePen size={13} strokeWidth={1.75} aria-hidden="true" />
+            <AppIcon icon={ICON.changeRequest} size="sm" />
             {open === 0
               ? "No open change requests"
               : open === 1

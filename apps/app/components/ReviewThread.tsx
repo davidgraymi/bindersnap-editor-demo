@@ -1,5 +1,7 @@
+import { followInApp, navigateToHref } from "../appLink";
+import { clampQuote } from "../textAnchor";
 import { useEffect, useRef, useState } from "react";
-import { Check, SmilePlus } from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 
 import type {
   CommentReaction,
@@ -32,6 +34,15 @@ interface ReviewThreadProps {
     content: ReactionKind,
     on: boolean,
   ) => void;
+}
+
+/** The change's Changes tab, where its documents — and the passage — are. */
+function passageHref(): string {
+  const change = window.location.pathname.replace(
+    /\/(diffs|preview|conflicts)\/?$/,
+    "",
+  );
+  return `${change}/diffs`;
 }
 
 function displayName(author: { login: string; fullName: string }): string {
@@ -67,6 +78,15 @@ export function ReviewThread({
   const [replying, setReplying] = useState(false);
   const [replyBody, setReplyBody] = useState("");
 
+  // Arriving from the passage it is about — "Reply or resolve" under a
+  // document — opens this thread and brings it into view.
+  const cardRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (window.location.hash !== `#thread-${thread.id}`) return;
+    setCollapsed(false);
+    cardRef.current?.scrollIntoView({ block: "center" });
+  }, [thread.id]);
+
   const facts = buildThreadFacts(thread, collapsed);
   const isExternal = thread.origin === "external";
   const canAct = canParticipate && !isExternal;
@@ -90,6 +110,8 @@ export function ReviewThread({
     <article
       className={`rev-thread${hidden ? " rev-thread--collapsed" : ""}`}
       data-testid="discussion-thread"
+      id={`thread-${thread.id}`}
+      ref={cardRef}
     >
       <header className="rev-thread-head">
         <PersonAvatar person={root.author} />
@@ -110,7 +132,7 @@ export function ReviewThread({
           </span>
         ) : facts.resolved ? (
           <span className="rev-mark rev-mark--resolved">
-            <Check size={11} strokeWidth={2.2} aria-hidden="true" />
+            <AppIcon icon={ICON.resolvedConcern} size="xs" heavy />
             Resolved
           </span>
         ) : (
@@ -134,6 +156,24 @@ export function ReviewThread({
           </button>
         ) : null}
       </header>
+
+      {/* The passage it is about, when it is about one: the words the
+          reviewer selected, and the way to them in the document. */}
+      {thread.anchor ? (
+        <blockquote className="rev-thread-passage">
+          <a
+            href={passageHref()}
+            title="Show this in the document"
+            onClick={(event) => {
+              const href = passageHref();
+              followInApp(event, () => navigateToHref(href));
+            }}
+          >
+            {clampQuote(thread.anchor.quote, 220)}
+          </a>
+          {thread.anchor.label ? <cite>{thread.anchor.label}</cite> : null}
+        </blockquote>
+      ) : null}
 
       <p className="rev-thread-body">{root.body}</p>
 
@@ -173,7 +213,7 @@ export function ReviewThread({
               floating above it — and it says out loud that it can be undone. */}
           {facts.resolutionNote ? (
             <p className="rev-thread-event">
-              <Check size={11} strokeWidth={2.2} aria-hidden="true" />
+              <AppIcon icon={ICON.resolvedConcern} size="xs" heavy />
               {facts.resolutionNote}
             </p>
           ) : null}
@@ -316,7 +356,7 @@ function ReactionRow({
             aria-haspopup="menu"
             onClick={() => setPickerOpen((open) => !open)}
           >
-            <SmilePlus size={14} strokeWidth={1.5} aria-hidden="true" />
+            <AppIcon icon={ICON.addReaction} size="sm" />
           </button>
 
           {pickerOpen ? (

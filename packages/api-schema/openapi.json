@@ -359,6 +359,28 @@
                     "avatarUrl"
                   ]
                 },
+                "coEditors": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "login": {
+                        "type": "string"
+                      },
+                      "fullName": {
+                        "type": "string"
+                      },
+                      "avatarUrl": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "login",
+                      "fullName",
+                      "avatarUrl"
+                    ]
+                  }
+                },
                 "body": {
                   "type": "string"
                 },
@@ -675,6 +697,28 @@
                     "avatarUrl"
                   ]
                 },
+                "coEditors": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "login": {
+                        "type": "string"
+                      },
+                      "fullName": {
+                        "type": "string"
+                      },
+                      "avatarUrl": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "login",
+                      "fullName",
+                      "avatarUrl"
+                    ]
+                  }
+                },
                 "body": {
                   "type": "string"
                 },
@@ -886,6 +930,28 @@
                     "fullName",
                     "avatarUrl"
                   ]
+                },
+                "coEditors": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "login": {
+                        "type": "string"
+                      },
+                      "fullName": {
+                        "type": "string"
+                      },
+                      "avatarUrl": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "login",
+                      "fullName",
+                      "avatarUrl"
+                    ]
+                  }
                 },
                 "body": {
                   "type": "string"
@@ -1880,6 +1946,40 @@
                 },
                 "updatedAt": {
                   "type": "string"
+                },
+                "anchor": {
+                  "type": "object",
+                  "nullable": true,
+                  "properties": {
+                    "document": {
+                      "type": "string",
+                      "maxLength": 300
+                    },
+                    "label": {
+                      "type": "string",
+                      "maxLength": 200
+                    },
+                    "quote": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 600
+                    },
+                    "prefix": {
+                      "type": "string",
+                      "maxLength": 80
+                    },
+                    "suffix": {
+                      "type": "string",
+                      "maxLength": 80
+                    }
+                  },
+                  "required": [
+                    "document",
+                    "label",
+                    "quote",
+                    "prefix",
+                    "suffix"
+                  ]
                 }
               },
               "required": [
@@ -1891,7 +1991,8 @@
                 "resolvedBy",
                 "resolvedAt",
                 "createdAt",
-                "updatedAt"
+                "updatedAt",
+                "anchor"
               ]
             }
           },
@@ -3423,6 +3524,63 @@
                 "organizations"
               ]
             }
+          },
+          "resourceRequests": {
+            "type": "object",
+            "properties": {
+              "people": {
+                "type": "number"
+              },
+              "byResource": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "resource": {
+                      "type": "string"
+                    },
+                    "requests": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "resource",
+                    "requests"
+                  ]
+                }
+              },
+              "recent": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "email": {
+                      "type": "string"
+                    },
+                    "resource": {
+                      "type": "string"
+                    },
+                    "requestedAt": {
+                      "type": "number"
+                    },
+                    "unsubscribed": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "email",
+                    "resource",
+                    "requestedAt",
+                    "unsubscribed"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "people",
+              "byResource",
+              "recent"
+            ]
           }
         },
         "required": [
@@ -3431,7 +3589,8 @@
           "byEntryPage",
           "bySite",
           "byCampaign",
-          "recent"
+          "recent",
+          "resourceRequests"
         ]
       },
       "AdminGrowthPayload": {
@@ -5221,6 +5380,28 @@
                                     "fullName",
                                     "avatarUrl"
                                   ]
+                                },
+                                "coEditors": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "login": {
+                                        "type": "string"
+                                      },
+                                      "fullName": {
+                                        "type": "string"
+                                      },
+                                      "avatarUrl": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "login",
+                                      "fullName",
+                                      "avatarUrl"
+                                    ]
+                                  }
                                 },
                                 "body": {
                                   "type": "string"
@@ -7640,6 +7821,31 @@
                               "avatarUrl"
                             ]
                           },
+                          "coEditors": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "login": {
+                                  "type": "string"
+                                },
+                                "fullName": {
+                                  "type": "string"
+                                },
+                                "avatarUrl": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "login",
+                                "fullName",
+                                "avatarUrl"
+                              ]
+                            }
+                          },
+                          "viewerCanEdit": {
+                            "type": "boolean"
+                          },
                           "documents": {
                             "type": "array",
                             "items": {
@@ -7684,6 +7890,8 @@
                           "reviews",
                           "reviewers",
                           "assignee",
+                          "coEditors",
+                          "viewerCanEdit",
                           "documents"
                         ]
                       }
@@ -8014,6 +8222,31 @@
                               "avatarUrl"
                             ]
                           },
+                          "coEditors": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "login": {
+                                  "type": "string"
+                                },
+                                "fullName": {
+                                  "type": "string"
+                                },
+                                "avatarUrl": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "login",
+                                "fullName",
+                                "avatarUrl"
+                              ]
+                            }
+                          },
+                          "viewerCanEdit": {
+                            "type": "boolean"
+                          },
                           "documents": {
                             "type": "array",
                             "items": {
@@ -8061,6 +8294,8 @@
                           "reviews",
                           "reviewers",
                           "assignee",
+                          "coEditors",
+                          "viewerCanEdit",
                           "documents",
                           "binder"
                         ]
@@ -11401,6 +11636,546 @@
             }
           }
         }
+      },
+      "get": {
+        "operationId": "getBinderSignOff",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "draft",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "change",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "ref",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Who signs off in the binder, on main or at the caller's draft, a branch or a change",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "string"
+                    },
+                    "workspace": {
+                      "type": "string"
+                    },
+                    "ref": {
+                      "type": "string"
+                    },
+                    "rules": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "scope": {
+                            "type": "string",
+                            "enum": [
+                              "binder",
+                              "folder",
+                              "document",
+                              "rules"
+                            ]
+                          },
+                          "target": {
+                            "type": "string"
+                          },
+                          "teams": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "users": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "scope",
+                          "target",
+                          "teams",
+                          "users"
+                        ]
+                      }
+                    },
+                    "unreadable": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "line": {
+                            "type": "number"
+                          },
+                          "text": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "line",
+                          "text"
+                        ]
+                      }
+                    },
+                    "requiredApprovals": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "approvers": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "groups": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "people": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "groups",
+                        "people"
+                      ]
+                    },
+                    "groups": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "members": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "login": {
+                                  "type": "string"
+                                },
+                                "fullName": {
+                                  "type": "string"
+                                },
+                                "hasAccess": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "login",
+                                "fullName",
+                                "hasAccess"
+                              ]
+                            }
+                          },
+                          "hasAccess": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "description",
+                          "members",
+                          "hasAccess"
+                        ]
+                      }
+                    },
+                    "people": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "login": {
+                            "type": "string"
+                          },
+                          "fullName": {
+                            "type": "string"
+                          },
+                          "hasAccess": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "login",
+                          "fullName",
+                          "hasAccess"
+                        ]
+                      }
+                    },
+                    "documents": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "uid": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "name": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "path",
+                          "uid",
+                          "name"
+                        ]
+                      }
+                    },
+                    "canEdit": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "organization",
+                    "workspace",
+                    "ref",
+                    "rules",
+                    "unreadable",
+                    "requiredApprovals",
+                    "approvers",
+                    "groups",
+                    "people",
+                    "documents",
+                    "canEdit"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "setBinderSignOffRule",
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "binder",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "rule": {
+                    "type": "object",
+                    "properties": {
+                      "scope": {
+                        "type": "string",
+                        "enum": [
+                          "binder",
+                          "folder",
+                          "document",
+                          "rules"
+                        ]
+                      },
+                      "target": {
+                        "type": "string"
+                      },
+                      "teams": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "users": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "required": [
+                      "scope",
+                      "target",
+                      "teams",
+                      "users"
+                    ]
+                  },
+                  "draft": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "boolean"
+                      }
+                    ]
+                  },
+                  "changeNumber": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "rule"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The rule, committed into the draft or change",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "string"
+                    },
+                    "workspace": {
+                      "type": "string"
+                    },
+                    "branch": {
+                      "type": "string"
+                    },
+                    "changeNumber": {
+                      "type": "number",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "organization",
+                    "workspace",
+                    "branch",
+                    "changeNumber"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/orgs/{org}/groups/{group}": {
+      "get": {
+        "operationId": "getOrganizationGroup",
+        "tags": [
+          "organizations"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "org",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "group",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A group: its people, its binders, and where it signs off",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organization": {
+                      "type": "string"
+                    },
+                    "group": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "access": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "description",
+                        "access"
+                      ]
+                    },
+                    "members": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "login": {
+                            "type": "string"
+                          },
+                          "fullName": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "login",
+                          "fullName"
+                        ]
+                      }
+                    },
+                    "canManage": {
+                      "type": "boolean"
+                    },
+                    "binders": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "approver": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "approver"
+                        ]
+                      }
+                    },
+                    "signsOff": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "binder": {
+                            "type": "string"
+                          },
+                          "scope": {
+                            "type": "string",
+                            "enum": [
+                              "binder",
+                              "folder",
+                              "document",
+                              "rules"
+                            ]
+                          },
+                          "place": {
+                            "type": "string"
+                          },
+                          "covers": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "path": {
+                                  "type": "string"
+                                },
+                                "uid": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "path",
+                                "uid",
+                                "name"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "binder",
+                          "scope",
+                          "place",
+                          "covers"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "organization",
+                    "group",
+                    "members",
+                    "canManage",
+                    "binders",
+                    "signsOff"
+                  ]
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/app/binders/{org}/{binder}/history": {
@@ -11791,6 +12566,9 @@
                     "pullRequestNumber": {
                       "type": "number",
                       "nullable": true
+                    },
+                    "sha": {
+                      "type": "string"
                     }
                   },
                   "required": [
@@ -12085,6 +12863,28 @@
                               "fullName",
                               "avatarUrl"
                             ]
+                          },
+                          "coEditors": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "login": {
+                                  "type": "string"
+                                },
+                                "fullName": {
+                                  "type": "string"
+                                },
+                                "avatarUrl": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "login",
+                                "fullName",
+                                "avatarUrl"
+                              ]
+                            }
                           },
                           "body": {
                             "type": "string"
@@ -12434,6 +13234,9 @@
                     "enum": [
                       "true"
                     ]
+                  },
+                  "basedOn": {
+                    "type": "string"
                   }
                 },
                 "required": [
@@ -12470,6 +13273,9 @@
                     "pullRequestNumber": {
                       "type": "number",
                       "nullable": true
+                    },
+                    "sha": {
+                      "type": "string"
                     }
                   },
                   "required": [
@@ -14081,6 +14887,28 @@
                             "avatarUrl"
                           ]
                         },
+                        "coEditors": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "login": {
+                                "type": "string"
+                              },
+                              "fullName": {
+                                "type": "string"
+                              },
+                              "avatarUrl": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "login",
+                              "fullName",
+                              "avatarUrl"
+                            ]
+                          }
+                        },
                         "body": {
                           "type": "string"
                         },
@@ -14185,6 +15013,28 @@
                         "assignee",
                         "approvalState"
                       ]
+                    },
+                    "coEditors": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "login": {
+                            "type": "string"
+                          },
+                          "fullName": {
+                            "type": "string"
+                          },
+                          "avatarUrl": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "login",
+                          "fullName",
+                          "avatarUrl"
+                        ]
+                      }
                     },
                     "branchLabel": {
                       "type": "string",
@@ -14405,12 +15255,20 @@
                         },
                         "canCloseOrReopen": {
                           "type": "boolean"
+                        },
+                        "canEdit": {
+                          "type": "boolean"
+                        },
+                        "canNameCoEditors": {
+                          "type": "boolean"
                         }
                       },
                       "required": [
                         "canApprove",
                         "canPublish",
-                        "canCloseOrReopen"
+                        "canCloseOrReopen",
+                        "canEdit",
+                        "canNameCoEditors"
                       ]
                     },
                     "approvalRules": {
@@ -14497,6 +15355,31 @@
                                 "avatarUrl"
                               ]
                             }
+                          },
+                          "reason": {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "approvers",
+                                  "rules",
+                                  "binder",
+                                  "folder",
+                                  "document"
+                                ]
+                              },
+                              "matched": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "matched"
+                            ]
                           }
                         },
                         "required": [
@@ -14507,9 +15390,138 @@
                           "people",
                           "required",
                           "eligible",
-                          "approvedBy"
+                          "approvedBy",
+                          "reason"
                         ]
                       }
+                    },
+                    "signOffChange": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "rules": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "scope": {
+                                "type": "string",
+                                "enum": [
+                                  "binder",
+                                  "folder",
+                                  "document",
+                                  "rules"
+                                ]
+                              },
+                              "target": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "added",
+                                  "removed",
+                                  "changed"
+                                ]
+                              },
+                              "teams": {
+                                "type": "object",
+                                "properties": {
+                                  "added": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "removed": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "unchanged": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "added",
+                                  "removed",
+                                  "unchanged"
+                                ]
+                              },
+                              "users": {
+                                "type": "object",
+                                "properties": {
+                                  "added": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "removed": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "unchanged": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "added",
+                                  "removed",
+                                  "unchanged"
+                                ]
+                              },
+                              "place": {
+                                "type": "string"
+                              },
+                              "covers": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "path": {
+                                      "type": "string"
+                                    },
+                                    "uid": {
+                                      "type": "string",
+                                      "nullable": true
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "path",
+                                    "uid",
+                                    "name"
+                                  ]
+                                }
+                              }
+                            },
+                            "required": [
+                              "scope",
+                              "target",
+                              "status",
+                              "teams",
+                              "users",
+                              "place",
+                              "covers"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "rules"
+                      ]
                     },
                     "outcome": {
                       "type": "string",
@@ -14537,6 +15549,7 @@
                     "organization",
                     "workspace",
                     "change",
+                    "coEditors",
                     "branchLabel",
                     "documents",
                     "removedDocuments",
@@ -14548,6 +15561,7 @@
                     "requiredReviewers",
                     "viewer",
                     "approvalRules",
+                    "signOffChange",
                     "outcome",
                     "closedAt",
                     "decidedBy",
@@ -14969,7 +15983,8 @@
                             "enum": [
                               "editor",
                               "text",
-                              "binary"
+                              "binary",
+                              "rules"
                             ]
                           },
                           "automatic": {
@@ -14978,7 +15993,126 @@
                             "enum": [
                               "ours",
                               "theirs",
+                              "merged",
                               null
+                            ]
+                          },
+                          "rules": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "rules": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "scope": {
+                                      "type": "string",
+                                      "enum": [
+                                        "binder",
+                                        "folder",
+                                        "document",
+                                        "rules"
+                                      ]
+                                    },
+                                    "target": {
+                                      "type": "string"
+                                    },
+                                    "teams": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "users": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    }
+                                  },
+                                  "required": [
+                                    "scope",
+                                    "target",
+                                    "teams",
+                                    "users"
+                                  ]
+                                }
+                              },
+                              "clashes": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "scope": {
+                                      "type": "string",
+                                      "enum": [
+                                        "binder",
+                                        "folder",
+                                        "document",
+                                        "rules"
+                                      ]
+                                    },
+                                    "target": {
+                                      "type": "string"
+                                    },
+                                    "ours": {
+                                      "type": "object",
+                                      "nullable": true,
+                                      "properties": {
+                                        "teams": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "users": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "string"
+                                          }
+                                        }
+                                      },
+                                      "required": [
+                                        "teams",
+                                        "users"
+                                      ]
+                                    },
+                                    "theirs": {
+                                      "type": "object",
+                                      "nullable": true,
+                                      "properties": {
+                                        "teams": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "string"
+                                          }
+                                        },
+                                        "users": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "string"
+                                          }
+                                        }
+                                      },
+                                      "required": [
+                                        "teams",
+                                        "users"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "scope",
+                                    "target",
+                                    "ours",
+                                    "theirs"
+                                  ]
+                                }
+                              }
+                            },
+                            "required": [
+                              "rules",
+                              "clashes"
                             ]
                           },
                           "base": {
@@ -15050,6 +16184,7 @@
                           "path",
                           "kind",
                           "automatic",
+                          "rules",
                           "base",
                           "ours",
                           "theirs"
@@ -15494,6 +16629,40 @@
                           },
                           "updatedAt": {
                             "type": "string"
+                          },
+                          "anchor": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "document": {
+                                "type": "string",
+                                "maxLength": 300
+                              },
+                              "label": {
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              "quote": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 600
+                              },
+                              "prefix": {
+                                "type": "string",
+                                "maxLength": 80
+                              },
+                              "suffix": {
+                                "type": "string",
+                                "maxLength": 80
+                              }
+                            },
+                            "required": [
+                              "document",
+                              "label",
+                              "quote",
+                              "prefix",
+                              "suffix"
+                            ]
                           }
                         },
                         "required": [
@@ -15505,7 +16674,8 @@
                           "resolvedBy",
                           "resolvedAt",
                           "createdAt",
-                          "updatedAt"
+                          "updatedAt",
+                          "anchor"
                         ]
                       }
                     },
@@ -15567,6 +16737,39 @@
                 "properties": {
                   "body": {
                     "type": "string"
+                  },
+                  "anchor": {
+                    "type": "object",
+                    "properties": {
+                      "document": {
+                        "type": "string",
+                        "maxLength": 300
+                      },
+                      "label": {
+                        "type": "string",
+                        "maxLength": 200
+                      },
+                      "quote": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 600
+                      },
+                      "prefix": {
+                        "type": "string",
+                        "maxLength": 80
+                      },
+                      "suffix": {
+                        "type": "string",
+                        "maxLength": 80
+                      }
+                    },
+                    "required": [
+                      "document",
+                      "label",
+                      "quote",
+                      "prefix",
+                      "suffix"
+                    ]
                   }
                 },
                 "required": [
@@ -15776,6 +16979,40 @@
                           },
                           "updatedAt": {
                             "type": "string"
+                          },
+                          "anchor": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "document": {
+                                "type": "string",
+                                "maxLength": 300
+                              },
+                              "label": {
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              "quote": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 600
+                              },
+                              "prefix": {
+                                "type": "string",
+                                "maxLength": 80
+                              },
+                              "suffix": {
+                                "type": "string",
+                                "maxLength": 80
+                              }
+                            },
+                            "required": [
+                              "document",
+                              "label",
+                              "quote",
+                              "prefix",
+                              "suffix"
+                            ]
                           }
                         },
                         "required": [
@@ -15787,7 +17024,8 @@
                           "resolvedBy",
                           "resolvedAt",
                           "createdAt",
-                          "updatedAt"
+                          "updatedAt",
+                          "anchor"
                         ]
                       }
                     },
@@ -15859,6 +17097,39 @@
                 "properties": {
                   "body": {
                     "type": "string"
+                  },
+                  "anchor": {
+                    "type": "object",
+                    "properties": {
+                      "document": {
+                        "type": "string",
+                        "maxLength": 300
+                      },
+                      "label": {
+                        "type": "string",
+                        "maxLength": 200
+                      },
+                      "quote": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 600
+                      },
+                      "prefix": {
+                        "type": "string",
+                        "maxLength": 80
+                      },
+                      "suffix": {
+                        "type": "string",
+                        "maxLength": 80
+                      }
+                    },
+                    "required": [
+                      "document",
+                      "label",
+                      "quote",
+                      "prefix",
+                      "suffix"
+                    ]
                   }
                 },
                 "required": [
@@ -16068,6 +17339,40 @@
                           },
                           "updatedAt": {
                             "type": "string"
+                          },
+                          "anchor": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "document": {
+                                "type": "string",
+                                "maxLength": 300
+                              },
+                              "label": {
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              "quote": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 600
+                              },
+                              "prefix": {
+                                "type": "string",
+                                "maxLength": 80
+                              },
+                              "suffix": {
+                                "type": "string",
+                                "maxLength": 80
+                              }
+                            },
+                            "required": [
+                              "document",
+                              "label",
+                              "quote",
+                              "prefix",
+                              "suffix"
+                            ]
                           }
                         },
                         "required": [
@@ -16079,7 +17384,8 @@
                           "resolvedBy",
                           "resolvedAt",
                           "createdAt",
-                          "updatedAt"
+                          "updatedAt",
+                          "anchor"
                         ]
                       }
                     },
@@ -16360,6 +17666,40 @@
                           },
                           "updatedAt": {
                             "type": "string"
+                          },
+                          "anchor": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "document": {
+                                "type": "string",
+                                "maxLength": 300
+                              },
+                              "label": {
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              "quote": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 600
+                              },
+                              "prefix": {
+                                "type": "string",
+                                "maxLength": 80
+                              },
+                              "suffix": {
+                                "type": "string",
+                                "maxLength": 80
+                              }
+                            },
+                            "required": [
+                              "document",
+                              "label",
+                              "quote",
+                              "prefix",
+                              "suffix"
+                            ]
                           }
                         },
                         "required": [
@@ -16371,7 +17711,8 @@
                           "resolvedBy",
                           "resolvedAt",
                           "createdAt",
-                          "updatedAt"
+                          "updatedAt",
+                          "anchor"
                         ]
                       }
                     },
@@ -16671,6 +18012,40 @@
                           },
                           "updatedAt": {
                             "type": "string"
+                          },
+                          "anchor": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "document": {
+                                "type": "string",
+                                "maxLength": 300
+                              },
+                              "label": {
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              "quote": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 600
+                              },
+                              "prefix": {
+                                "type": "string",
+                                "maxLength": 80
+                              },
+                              "suffix": {
+                                "type": "string",
+                                "maxLength": 80
+                              }
+                            },
+                            "required": [
+                              "document",
+                              "label",
+                              "quote",
+                              "prefix",
+                              "suffix"
+                            ]
                           }
                         },
                         "required": [
@@ -16682,7 +18057,8 @@
                           "resolvedBy",
                           "resolvedAt",
                           "createdAt",
-                          "updatedAt"
+                          "updatedAt",
+                          "anchor"
                         ]
                       }
                     },
@@ -16828,6 +18204,12 @@
                   "assignee": {
                     "type": "string",
                     "nullable": true
+                  },
+                  "coEditors": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
                   },
                   "reviewers": {
                     "type": "array",
@@ -18711,6 +20093,63 @@
                           "organizations"
                         ]
                       }
+                    },
+                    "resourceRequests": {
+                      "type": "object",
+                      "properties": {
+                        "people": {
+                          "type": "number"
+                        },
+                        "byResource": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "resource": {
+                                "type": "string"
+                              },
+                              "requests": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "resource",
+                              "requests"
+                            ]
+                          }
+                        },
+                        "recent": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "email": {
+                                "type": "string"
+                              },
+                              "resource": {
+                                "type": "string"
+                              },
+                              "requestedAt": {
+                                "type": "number"
+                              },
+                              "unsubscribed": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "email",
+                              "resource",
+                              "requestedAt",
+                              "unsubscribed"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "people",
+                        "byResource",
+                        "recent"
+                      ]
                     }
                   },
                   "required": [
@@ -18719,7 +20158,8 @@
                     "byEntryPage",
                     "bySite",
                     "byCampaign",
-                    "recent"
+                    "recent",
+                    "resourceRequests"
                   ]
                 }
               }

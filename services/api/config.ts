@@ -33,6 +33,8 @@ export interface ApiConfig {
   // Where the API itself is reached from outside — for links that must hit
   // the API rather than the app, like an email's one-click unsubscribe.
   apiOrigin: string;
+  /** The public site (bindersnap.com), never an allowed browser origin. */
+  siteOrigin: string;
   configuredAllowedOrigins: Set<string>;
   hasExplicitBrowserOrigins: boolean;
   emailDomain: string;
@@ -110,6 +112,8 @@ const STRING_ENV: Record<string, StringSpec> = {
   BINDERSNAP_ALLOWED_ORIGINS: { default: "" },
   BINDERSNAP_APP_ORIGIN: { default: "" },
   BINDERSNAP_API_ORIGIN: { default: "" },
+  // The public site, for links in email to people who have no account.
+  BINDERSNAP_SITE_ORIGIN: { default: "https://bindersnap.com" },
   BINDERSNAP_USER_EMAIL_DOMAIN: { default: "users.bindersnap.local" },
   BINDERSNAP_SESSION_COOKIE_NAME: { default: "bindersnap_session" },
   BINDERSNAP_GITEA_TOKEN_SCOPES: { default: "" },
@@ -461,6 +465,10 @@ export function initializeConfig(
       resolveOrigin(
         parseString(resolvedEnv, "BINDERSNAP_API_ORIGIN", isProduction),
       ) ?? `http://localhost:${apiPort}`,
+    siteOrigin:
+      resolveOrigin(
+        parseString(resolvedEnv, "BINDERSNAP_SITE_ORIGIN", isProduction),
+      ) ?? "https://bindersnap.com",
     emailDomain: parseString(
       resolvedEnv,
       "BINDERSNAP_USER_EMAIL_DOMAIN",

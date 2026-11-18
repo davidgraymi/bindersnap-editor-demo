@@ -1,4 +1,4 @@
-import { Check } from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 
 /** The plan as the billing status reports it. */
 export interface OfferedPlan {
@@ -104,7 +104,7 @@ export function PlanOffer({
       <ul className="plan-offer-list">
         {INCLUDED.map((line) => (
           <li key={line}>
-            <Check size={15} strokeWidth={2} aria-hidden="true" />
+            <AppIcon icon={ICON.selected} size="md" heavy />
             {line}
           </li>
         ))}

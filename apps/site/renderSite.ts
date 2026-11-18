@@ -3,6 +3,7 @@ import { join } from "node:path";
 
 import { stripTags } from "../../packages/utils/stripTags";
 import { analyticsTag, trackAttributes } from "./analytics";
+import { sendForm } from "./sendForm";
 import { SIGNUP_SOURCE_SCRIPT } from "./signupSource";
 import { shareHtml } from "./sharePage";
 import { appOrigin, appUrl } from "./appLink";
@@ -358,7 +359,7 @@ export function softwareApplicationLd(price: string, currency = "USD") {
  */
 export function frameTemplate(html: string, page?: SitePage): string {
   const download = page
-    ? `<p class="site-download"><a class="site-download-button" href="${page.path}.docx" download="${page.slug}.docx"${trackAttributes("template_download", { template: page.slug })}>Download as Word (.docx)</a><span>Edit it in Word, then upload it to Bindersnap to keep its approvals and every version.</span></p>`
+    ? `<p class="site-download"><a class="site-download-button" href="${page.path}.docx" download="${page.slug}.docx"${trackAttributes("template_download", { template: page.slug })}>Download as Word (.docx)</a><span>Edit it in Word, then upload it to Bindersnap to keep its approvals and every version.</span></p>${sendForm(page.path, "the Word file")}`
     : "";
   return html.replace(
     /(<h2 id="the-template">[\s\S]*?<\/h2>)([\s\S]*?)(?=<h2 |$)/,

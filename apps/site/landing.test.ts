@@ -125,6 +125,30 @@ test("the landing page draws without waiting for its script", () => {
   expect(script).not.toMatch(/from "(react|react-dom|lucide-react)/);
 });
 
+test("the landing page's icons follow the app's vocabulary", () => {
+  // The landing page copies Lucide's paths rather than load it, so nothing
+  // ties it to packages/ui-tokens/icons.tsx but this: the same scale, no Git
+  // symbols, and the seal only on the version on record.
+  const html = readFileSync(join(import.meta.dir, "index.html"), "utf8");
+  const icons = [
+    ...html.matchAll(
+      /<span\s+class="landing-lucide-icon[^"]*"[\s\S]*?<svg\b([\s\S]*?)>/g,
+    ),
+  ].map((match) => ({
+    glyph: /class="lucide lucide-([a-z0-9-]+)"/.exec(match[1]!)?.[1],
+    size: /\bwidth="(\d+)"/.exec(match[1]!)?.[1],
+  }));
+
+  expect(icons.length).toBeGreaterThan(0);
+  for (const { glyph, size } of icons) {
+    expect(["12", "14", "16", "20"], `${glyph} at ${size}px`).toContain(
+      size ?? "",
+    );
+    expect(glyph ?? "", "a Git symbol").not.toStartWith("git-");
+  }
+  expect(icons.filter(({ glyph }) => glyph === "badge-check")).toHaveLength(1);
+});
+
 test("the landing page promises the trial the way every other page does", () => {
   // Cold traffic lands here. A cautious buyer reads "Cancel anytime" as a
   // subscription about to start, so both forms make the inner pages' offer,

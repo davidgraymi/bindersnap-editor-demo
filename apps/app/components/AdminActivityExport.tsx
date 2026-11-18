@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Download } from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 
 import { exportAdminActivity } from "../api";
 
@@ -49,7 +49,7 @@ export function ActivityExportButton() {
         title="Dates, kinds and ids. No names or email addresses."
         onClick={() => void download()}
       >
-        <Download size={14} strokeWidth={1.6} aria-hidden="true" />
+        <AppIcon icon={ICON.download} size="sm" />
         {busy ? "Preparing…" : "Download CSV"}
       </button>
       {error ? (

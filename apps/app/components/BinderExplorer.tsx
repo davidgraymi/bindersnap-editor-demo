@@ -1,15 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  Check,
-  ChevronDown,
-  ChevronRight,
-  CircleCheck,
-  FilePen,
-  FileText,
-  Folder,
-  PanelLeftClose,
-  PanelLeftOpen,
-} from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 
 import { followInApp } from "../appLink";
 import { routeToPath, type AppRoute } from "../routes";
@@ -115,7 +105,7 @@ export function BinderExplorer({ binder, onNavigate }: BinderExplorerProps) {
           title="Show the files"
           onClick={toggle}
         >
-          <PanelLeftOpen size={15} strokeWidth={1.75} aria-hidden="true" />
+          <AppIcon icon={ICON.showPanel} size="md" />
         </button>
       </div>
     );
@@ -150,7 +140,7 @@ export function BinderExplorer({ binder, onNavigate }: BinderExplorerProps) {
           title={label}
           onClick={(event) => followInApp(event, () => onNavigate(to))}
         >
-          <FileText size={14} strokeWidth={1.6} aria-hidden="true" />
+          <AppIcon icon={ICON.document} size="sm" />
           <span className="app-explorer-name">{label}</span>
         </a>
       );
@@ -159,32 +149,63 @@ export function BinderExplorer({ binder, onNavigate }: BinderExplorerProps) {
     // A filter that found something inside a shut folder has found nothing
     // anybody can see, so a filtered tree is open whatever was shut.
     const open = needle !== "" || isOpen(node.path);
+    const name = formatDocumentName(node.name);
+    const on = node.path === contents.activeFolder;
+    const to: AppRoute = {
+      kind: "binder",
+      org: binder.org,
+      binder: binder.binder,
+      folder: node.path,
+      ...(contents.ref ? { ref: contents.ref } : {}),
+    };
 
+    // **Explorer's left pane.** The arrow opens and shuts the folder in
+    // place; the name opens the folder's page, where its contents and who
+    // signs off on it are. Two controls, because they are two acts.
     return (
       <div className="app-explorer-group" key={`folder:${node.path}`}>
-        <button
-          type="button"
-          className="app-explorer-folder"
+        <div
+          className={`app-explorer-folder${on ? " app-explorer-folder--active" : ""}`}
           style={{ paddingLeft: `${8 + depth * 14}px` }}
-          aria-expanded={open}
-          onClick={() => toggleFolder(node.path)}
         >
-          {open ? (
-            <ChevronDown size={13} strokeWidth={1.75} aria-hidden="true" />
-          ) : (
-            <ChevronRight size={13} strokeWidth={1.75} aria-hidden="true" />
-          )}
-          {/* **A folder looks like a folder.** Every row carried a glyph
-              except this one, so a shut folder was a word with a triangle
-              beside it and a policy was a word with a page beside it — the
-              two kinds of row were told apart by a 13px triangle alone. The
-              same icon the binder's own tree draws, because they are the same
-              tree. */}
-          <Folder size={14} strokeWidth={1.6} aria-hidden="true" />
-          <span className="app-explorer-name">
-            {formatDocumentName(node.name)}
-          </span>
-        </button>
+          <button
+            type="button"
+            className="app-explorer-chevron"
+            aria-expanded={open}
+            aria-label={open ? `Shut ${name}` : `Open ${name} here`}
+            title={open ? `Shut ${name}` : `Open ${name} here`}
+            onClick={() => toggleFolder(node.path)}
+          >
+            {open ? (
+              <AppIcon icon={ICON.chevronDown} size="sm" />
+            ) : (
+              <AppIcon icon={ICON.chevronRight} size="sm" />
+            )}
+          </button>
+          <a
+            className="app-explorer-folderlink"
+            href={routeToPath(to)}
+            aria-current={on ? "page" : undefined}
+            title={name}
+            onClick={(event) => followInApp(event, () => onNavigate(to))}
+            onKeyDown={(event) => {
+              // Right and Left open and shut, as in any tree; Enter follows
+              // the link to the folder's page.
+              if (event.key === "ArrowRight" && !open) {
+                event.preventDefault();
+                toggleFolder(node.path);
+              } else if (event.key === "ArrowLeft" && open) {
+                event.preventDefault();
+                toggleFolder(node.path);
+              }
+            }}
+          >
+            {/* **A folder looks like a folder.** The same icon the binder's
+                own tree draws, because they are the same tree. */}
+            <AppIcon icon={ICON.folder} size="sm" />
+            <span className="app-explorer-name">{name}</span>
+          </a>
+        </div>
         {open
           ? node.children.map((child) => renderNode(child, depth + 1))
           : null}
@@ -204,7 +225,7 @@ export function BinderExplorer({ binder, onNavigate }: BinderExplorerProps) {
           title="Hide the files"
           onClick={toggle}
         >
-          <PanelLeftClose size={15} strokeWidth={1.75} aria-hidden="true" />
+          <AppIcon icon={ICON.hidePanel} size="md" />
         </button>
       </div>
 
@@ -351,7 +372,7 @@ function VersionPicker({
       >
         <RefIcon refOn={on} />
         <span className="app-explorer-versionname">{on.label}</span>
-        <ChevronDown size={13} strokeWidth={1.75} aria-hidden="true" />
+        <AppIcon icon={ICON.chevronDown} size="sm" />
       </button>
 
       {open && at ? (
@@ -385,7 +406,7 @@ function VersionPicker({
                 </span>
               </span>
               {entry.current ? (
-                <Check size={14} strokeWidth={2} aria-hidden="true" />
+                <AppIcon icon={ICON.selected} size="sm" heavy />
               ) : null}
             </button>
           ))}
@@ -396,27 +417,27 @@ function VersionPicker({
 }
 
 /**
- * The record, or a proposal — the two glyphs a change row already uses.
+ * The record, a change request or a draft — the vocabulary's lifecycle
+ * shapes (packages/ui-tokens/icons.tsx).
  *
  * Borrowed deliberately: somebody who has read the change list has been
- * taught that a tick is on the record and a document-with-a-pen is something
- * still being proposed, and teaching it twice with two sets of icons is how a
+ * taught that the seal is on the record and a clipboard is something still
+ * being proposed, and teaching it twice with two sets of icons is how a
  * product stops meaning anything.
  */
 function RefIcon({ refOn }: { refOn: ReadableRef }) {
-  return refOn.ref === null && refOn.change === null ? (
-    <CircleCheck
+  // A draft has no ref and no change either, and is not the record.
+  return refOn.ref === null && refOn.change === null && !refOn.draft ? (
+    <AppIcon
+      icon={ICON.onRecord}
+      size="sm"
       className="app-explorer-versionicon app-explorer-versionicon--record"
-      size={14}
-      strokeWidth={1.6}
-      aria-hidden="true"
     />
   ) : (
-    <FilePen
+    <AppIcon
+      icon={refOn.change === null ? ICON.draft : ICON.changeRequest}
+      size="sm"
       className="app-explorer-versionicon"
-      size={14}
-      strokeWidth={1.6}
-      aria-hidden="true"
     />
   );
 }

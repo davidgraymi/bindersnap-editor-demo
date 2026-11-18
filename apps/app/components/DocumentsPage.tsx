@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { BookOpen, FileText } from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 
 import { type LibraryPayload } from "../api";
 import { libraryQuery } from "../data/queries";
@@ -211,7 +211,7 @@ export function DocumentsPage({
                       )
                     }
                   >
-                    <BookOpen size={15} strokeWidth={1.6} aria-hidden="true" />
+                    <AppIcon icon={ICON.binder} size="md" />
                     {heading}
                   </a>
                 </h2>
@@ -243,11 +243,7 @@ export function DocumentsPage({
                       }
                     >
                       <span className="bs-row-icon">
-                        <FileText
-                          size={16}
-                          strokeWidth={1.5}
-                          aria-hidden="true"
-                        />
+                        <AppIcon icon={ICON.document} size="md" />
                       </span>
                       <span className="bs-row-body">
                         <span className="bs-row-name">{row.name}</span>

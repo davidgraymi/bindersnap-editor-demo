@@ -1741,6 +1741,109 @@ input {
   height: auto;
 }
 
+/* ── Who signs off here ────────────────────────────────────────────────────
+   The rail panel on the binder, folder and document pages, and the editor's
+   right-hand panel. Set here, then From above; each a list of rows. */
+.signoff-lead {
+  margin: 0;
+  padding: var(--brand-space-2) var(--brand-space-2) var(--brand-space-1);
+  color: var(--bs-text-secondary);
+  font-size: var(--brand-text-ui-md);
+  line-height: var(--brand-leading-normal);
+}
+
+.signoff-section {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--brand-space-2);
+  margin: 0;
+  padding: var(--brand-space-2) var(--brand-space-2) var(--brand-space-1);
+  border-top: 1px solid var(--bs-rule-warm);
+  color: var(--bs-text-secondary);
+  font-size: var(--brand-text-ui-sm);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.signoff-section-note {
+  color: var(--bs-text-faint);
+  font-weight: var(--brand-weight-regular);
+}
+
+/* The name and the faces share the first line; the detail runs under both,
+   so the faces never squeeze it into a column. */
+.signoff-row-top {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+}
+
+.signoff-row-top > .bs-row-name {
+  flex: 1;
+  min-width: 0;
+}
+
+/* As wide as a face, so a person and a group start their names together. */
+.signoff-row > .signoff-row-lead {
+  width: var(--brand-space-6);
+}
+
+.signoff-row .bs-row-name--wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+  font-size: var(--brand-text-ui-md);
+}
+
+.signoff-origin {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  color: var(--bs-coral-text);
+  text-decoration: none;
+}
+
+.signoff-origin:hover {
+  text-decoration: underline;
+}
+
+.signoff-faces {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--brand-space-0-5);
+}
+
+.signoff-more {
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+}
+
+.signoff-add {
+  padding: var(--brand-space-1) var(--brand-space-2) var(--brand-space-2);
+}
+
+.signoff-foot {
+  margin: 0;
+  padding: var(--brand-space-2);
+  border-top: 1px solid var(--bs-rule-warm);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+  line-height: var(--brand-leading-normal);
+}
+
+.group-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.group-link:hover,
+.group-link:focus-visible {
+  color: var(--bs-coral-text);
+  text-decoration: underline;
+}
+
 /* Summary rail — what somebody still has to decide, then what is already on
    the record. Each is a panel of the shared grammar. */
 .doc-rail {
@@ -1848,6 +1951,70 @@ input {
   flex-wrap: wrap;
   justify-content: flex-end;
   max-width: 45%;
+}
+
+/* ── Help, beside the thing it explains ──────────────────────────
+   `HelpLink`: the help mark and a few words, quiet until wanted. It takes
+   the colour of the text around it, so it reads on a note of any tone. */
+.bs-help-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-1);
+  border-radius: var(--brand-radius-sm);
+  color: inherit;
+  font-size: inherit;
+  font-weight: var(--brand-weight-medium);
+  text-decoration: underline;
+  text-decoration-color: var(--bs-rule-warm);
+  text-underline-offset: 0.2em;
+  vertical-align: baseline;
+  white-space: nowrap;
+  transition:
+    color var(--brand-transition-fast),
+    text-decoration-color var(--brand-transition-fast);
+}
+
+.bs-help-link svg {
+  flex: none;
+  align-self: center;
+}
+
+.bs-help-link:hover {
+  color: var(--bs-coral-text);
+  text-decoration-color: currentColor;
+}
+
+.bs-help-link:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: 2px;
+}
+
+/* In a bar of buttons: the mark alone, the size of the buttons beside it. */
+.bs-help-link--icon {
+  justify-content: center;
+  width: var(--brand-space-8);
+  height: var(--brand-space-8);
+  border-radius: var(--brand-radius-md);
+  color: var(--bs-text-muted);
+  text-decoration: none;
+}
+
+.bs-help-link--icon:hover {
+  background: var(--bs-surface-2);
+  color: var(--bs-text-primary);
+}
+
+.signoff-help {
+  margin: 0;
+  padding: var(--brand-space-2);
+  border-top: 1px solid var(--bs-rule-warm);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+}
+
+.signoff-foot + .signoff-help {
+  padding-top: 0;
+  border-top: 0;
 }
 
 /* Named for a screen reader, invisible to everyone else. */
@@ -2035,6 +2202,204 @@ input {
   font-weight: var(--brand-weight-medium);
 }
 
+/* Why a rule is on this change: the table's third line (4.9). */
+.rev-rules-why {
+  display: block;
+  margin-top: var(--brand-space-0-5);
+  color: var(--bs-text-faint);
+  font-size: var(--brand-text-ui-sm);
+  font-weight: var(--brand-weight-regular);
+}
+
+.rev-rules-why a {
+  color: var(--bs-coral-text);
+}
+
+.rev-rules-notes {
+  padding: var(--brand-space-2) var(--brand-space-3);
+  border-top: 1px solid var(--bs-rule-warm);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+}
+
+.rev-rules-notes p {
+  margin: 0;
+}
+
+.rev-rules-notes p + p {
+  margin-top: var(--brand-space-1);
+}
+
+/* The rule section on the Changes tab (4.11): owners as chips. Added is
+   green with a plus, removed red and struck through; neither is colour
+   alone. */
+.cmp-rules {
+  margin-bottom: var(--brand-space-4);
+}
+
+/* A group's or a person's card opens below its chip and may reach past the
+   panel's foot; the bar rounds its own corners instead. Two classes, to win
+   over `.bs-panel`'s overflow. */
+.bs-panel.cmp-rules {
+  overflow: visible;
+}
+
+.cmp-rules > .bs-panel-bar {
+  border-radius: var(--brand-radius-lg) var(--brand-radius-lg) 0 0;
+}
+
+.cmp-rules .bs-row-name a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.cmp-rules .bs-row-name a:hover {
+  color: var(--bs-coral-text);
+  text-decoration: underline;
+}
+
+.cmp-rules-owners {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--brand-space-1);
+  margin: var(--brand-space-1) 0;
+}
+
+.cmp-rules-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-0-5);
+  padding: 1px var(--brand-space-2);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-full);
+  background: var(--bs-surface-2);
+  color: var(--bs-text-secondary);
+  font-size: var(--brand-text-ui-sm);
+}
+
+/* A name in a chip is a link or a card; it keeps the chip's colour. */
+.cmp-rules-chip .group-link {
+  color: inherit;
+}
+
+.cmp-rules-chip--removed .group-link,
+.cmp-rules-chip--removed del {
+  text-decoration: line-through;
+}
+
+.cmp-rules-chip--added {
+  border-color: var(--bs-status-ok-border);
+  background: var(--bs-status-ok-bg);
+  color: var(--bs-status-ok-fg);
+}
+
+.cmp-rules-chip--removed {
+  border-color: var(--bs-status-danger-border);
+  background: var(--bs-status-danger-bg);
+  color: var(--bs-status-danger-fg);
+}
+
+.cmp-rules-effect {
+  white-space: normal;
+}
+
+/* About this change, in the rail (D12). */
+.change-about {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--brand-space-1-5) var(--brand-space-3);
+  margin: 0;
+  padding: var(--brand-space-2-5) var(--brand-space-3);
+  font-size: var(--brand-text-ui-sm);
+}
+
+.change-about dt {
+  color: var(--bs-text-muted);
+}
+
+.change-about dd {
+  margin: 0;
+  min-width: 0;
+  color: var(--bs-text-primary);
+}
+
+/* Who else may edit the change, in "About this change". */
+.change-coeditors {
+  display: grid;
+  gap: var(--brand-space-1);
+  justify-items: start;
+}
+
+.change-coeditors-list {
+  display: grid;
+  gap: var(--brand-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.change-coeditors-none {
+  color: var(--bs-text-muted);
+}
+
+.change-coeditors-add {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-1);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--bs-text-muted);
+  font: inherit;
+  font-size: var(--brand-text-ui-sm);
+  font-weight: var(--brand-weight-medium);
+  cursor: pointer;
+}
+
+.change-coeditors-add:hover {
+  color: var(--bs-coral-text);
+}
+
+.change-coeditors-add:focus-visible,
+.change-coeditors-remove:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: 2px;
+  border-radius: var(--brand-radius-sm);
+}
+
+.change-coeditors-pick {
+  display: block;
+  width: 100%;
+}
+
+.change-about-person {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+}
+
+/* The approve step, for a change that edits who signs off (4.10). */
+.rev-decision-confirm-rules,
+.rev-decision-confirm-counts {
+  margin: 0;
+  color: var(--bs-text-secondary);
+  font-size: var(--brand-text-ui-sm);
+  line-height: var(--brand-leading-normal);
+}
+
+.rev-decision-confirm-rules a {
+  color: var(--bs-coral-text);
+}
+
+.rev-decision-confirm-counts p {
+  margin: 0;
+}
+
+.rev-decision-confirm-counts ul {
+  margin: var(--brand-space-0-5) 0 0;
+  padding-left: var(--brand-space-4);
+}
+
 .rev-rules-owners {
   display: block;
   color: var(--bs-text-muted);
@@ -2061,6 +2426,26 @@ input {
   border-radius: var(--brand-radius-md);
   font-size: var(--brand-text-sm);
   color: var(--bs-text-secondary);
+}
+
+.rev-outcome p {
+  margin: 0;
+}
+
+/* Where a published change's documents now stand. */
+.rev-outcome-links {
+  margin: var(--brand-space-1) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rev-outcome-links a {
+  color: var(--bs-text-primary);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.rev-outcome-links a:hover {
+  color: var(--bs-coral-text);
 }
 
 /* ── Proposed version ──────────────────────────────────────────────
@@ -2269,6 +2654,88 @@ input {
    screen — a reviewer list you recognise beats one you have to read.
    ------------------------------------------------------------------ */
 
+/* A face that opens a card: full name, @username, why they are here. */
+.person-card-anchor {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  border-radius: var(--brand-radius-full);
+  cursor: default;
+}
+
+/* A face and a name together, as in a chip: the pair opens the card. */
+.person-card-anchor--label {
+  align-items: center;
+  gap: var(--brand-space-1);
+  border-radius: var(--brand-radius-sm);
+}
+
+/* A group's name that opens a card about who is in it (GroupLink). */
+.group-card-anchor {
+  position: relative;
+  display: inline-flex;
+}
+
+.group-card {
+  align-items: flex-start;
+}
+
+.group-card-people {
+  display: grid;
+  gap: var(--brand-space-1);
+  margin-top: var(--brand-space-1);
+  color: var(--bs-text-secondary);
+  font-size: var(--brand-text-ui-sm);
+}
+
+.group-card-person {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+}
+
+.person-card-anchor:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: 2px;
+}
+
+.person-card {
+  position: absolute;
+  top: calc(100% + var(--brand-space-1-5));
+  left: 50%;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-2-5);
+  width: max-content;
+  max-width: 280px;
+  padding: var(--brand-space-2-5) var(--brand-space-3);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-lg);
+  background: var(--bs-surface-1);
+  box-shadow: var(--bs-elevation-menu);
+  transform: translateX(-50%);
+  text-align: left;
+}
+
+.person-card-text {
+  display: grid;
+  gap: var(--brand-space-0-5);
+  min-width: 0;
+}
+
+.person-card-name {
+  color: var(--bs-text-primary);
+  font-size: var(--brand-text-ui-md);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.person-card-login,
+.person-card-context {
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+}
+
 .rev-avatar {
   display: inline-flex;
   align-items: center;
@@ -2279,6 +2746,12 @@ input {
   font-weight: var(--brand-weight-semibold);
   background: var(--bs-surface-2);
   color: var(--bs-text-muted);
+}
+
+.rev-avatar--xs {
+  width: 18px;
+  height: 18px;
+  font-size: 8px;
 }
 
 .rev-avatar--sm {
@@ -4242,6 +4715,29 @@ a.bs-knot {
 
 .create-document-modal {
   width: min(100%, 620px);
+}
+
+/* Edit, on a document somebody is already changing (EditChoiceDialog): one
+   row per open change, the act that is yours on its right. */
+.edit-choice-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-bottom: 1px solid var(--bs-rule-warm);
+}
+
+.edit-choice-row {
+  gap: var(--brand-space-3);
+  padding-block: var(--brand-space-2);
+}
+
+.edit-choice-row .bs-row-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.edit-choice-row .bs-btn {
+  flex-shrink: 0;
 }
 
 /* Send feedback (FeedbackDialog). Long enough to write a real report in, and
@@ -6313,34 +6809,106 @@ a.admin-console-primary:hover {
    HOME — what has been happening in your binders
    ═════════════════════════════════════════════════════════════ */
 
-/* The one thing on Home that is yours to do: a way to the change requests
-   page, not a second copy of it. */
-.home-waiting {
-  display: flex;
-  align-items: center;
-  gap: var(--brand-space-3);
-  padding: var(--brand-space-3) var(--brand-space-4);
-  border: 1px solid var(--bs-rule);
-  border-radius: var(--brand-radius-lg);
-  background: var(--bs-surface-1);
-  color: var(--bs-text-primary);
-  font-size: var(--brand-text-ui-lg);
-  font-weight: var(--brand-weight-medium);
+/* Your turn: what is waiting on the reader, each row with its one act. */
+.home-tasks-all {
+  margin-left: auto;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
   text-decoration: none;
 }
 
-.home-waiting:hover {
+.home-tasks-all:hover {
+  color: var(--bs-coral-text);
+  text-decoration: underline;
+}
+
+.home-tasks-all:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: 2px;
+  border-radius: var(--brand-radius-sm);
+}
+
+.home-tasks-empty {
+  max-width: var(--brand-measure);
+  margin: 0;
+  padding: var(--brand-space-4) var(--brand-space-3);
+  color: var(--bs-text-secondary);
+  font-size: var(--brand-text-ui-md);
+}
+
+.home-task {
+  padding: 0;
+}
+
+.home-task-link {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-3);
+  width: 100%;
+  min-height: var(--brand-space-12);
+  padding: var(--brand-space-2) var(--brand-space-3);
+  box-sizing: border-box;
+  color: inherit;
+  text-decoration: none;
+}
+
+.home-task-link:hover {
   background: var(--bs-surface-2);
 }
 
-.home-waiting:focus-visible {
+.home-task-link:focus-visible {
   outline: 2px solid var(--brand-coral);
-  outline-offset: 2px;
+  outline-offset: -2px;
 }
 
-.home-waiting-go {
-  margin-left: auto;
+.home-task-body {
+  display: grid;
+  flex: 1;
+  gap: var(--brand-space-0-5);
+  min-width: 0;
+}
+
+.home-task-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* On a phone the name is the row: it wraps rather than ending in dots. */
+@media (max-width: 640px) {
+  .home-task .home-task-title {
+    overflow: visible;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
+
+/* The act, said once per row. Ink, not coral: with a row each, coral would
+   be on everything. */
+.home-task-action {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--brand-space-1);
+  color: var(--bs-text-primary);
+  font-size: var(--brand-text-ui-md);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.home-task-link:hover .home-task-action {
   color: var(--bs-coral-text);
+}
+
+.home-section-title {
+  margin: var(--brand-space-4) 0 0;
+  color: var(--bs-text-primary);
+  font-family: var(--brand-font-sans);
+  font-size: var(--brand-text-ui-lg);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.home-feed-others {
+  color: var(--bs-text-muted);
 }
 
 .home-feed {
@@ -7295,10 +7863,192 @@ a.cmp-branch:focus-visible {
   color: var(--bs-coral-text);
 }
 
+/* On a document's own bar the count is a sentence, so it is set as one. */
+.cmp-counts--spelled {
+  font-family: var(--brand-font-sans);
+  font-size: var(--brand-text-ui-md);
+  font-weight: var(--brand-weight-medium);
+}
+
+.cmp-counts-sep {
+  color: var(--bs-text-faint);
+}
+
 .cmp-counts-note {
   font-family: inherit;
   font-weight: var(--brand-weight-medium);
   color: var(--bs-status-info-fg);
+}
+
+/* ── Comments on a passage ────────────────────────────────────────────────
+   `PassageComments`: select words in a document, comment on them. The words
+   are painted, not wrapped — the page's own markup is left as it was
+   approved. Amber for a comment still open (the status ramp's "needs
+   review"), a quiet rule for one that is settled. */
+::highlight(bs-passage) {
+  background-color: var(--bs-status-warn-bg);
+  text-decoration: underline;
+  text-decoration-color: var(--bs-status-warn-fg);
+}
+
+::highlight(bs-passage-settled) {
+  text-decoration: underline dotted;
+  text-decoration-color: var(--bs-text-muted);
+}
+
+::highlight(bs-passage-flash) {
+  background-color: var(--bs-coral-glow);
+}
+
+.passage {
+  position: relative;
+}
+
+/* Offered at the end of the selection, like a word processor's margin mark. */
+.passage-offer,
+.passage-compose {
+  position: absolute;
+  z-index: 3;
+}
+
+.passage-offer {
+  box-shadow: var(--bs-elevation-menu);
+}
+
+.passage-compose {
+  display: grid;
+  gap: var(--brand-space-2);
+  width: min(20rem, calc(100% - var(--brand-space-4)));
+  padding: var(--brand-space-3);
+  box-shadow: var(--bs-elevation-menu);
+}
+
+.passage-compose-acts {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--brand-space-2);
+}
+
+.passage-quote {
+  margin: 0;
+  padding: 0 0 0 var(--brand-space-2);
+  border: 0;
+  border-left: 3px solid var(--bs-status-warn-border);
+  background: none;
+  color: var(--bs-text-secondary);
+  font: inherit;
+  font-size: var(--brand-text-ui-sm);
+  font-style: italic;
+  line-height: var(--brand-leading-normal);
+  text-align: left;
+}
+
+.passage-quote--go {
+  cursor: pointer;
+}
+
+.passage-quote--go:hover {
+  color: var(--bs-coral-text);
+}
+
+.passage-quote--go:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: 2px;
+}
+
+.passage-quote--gone {
+  border-left-color: var(--bs-rule);
+  color: var(--bs-text-muted);
+}
+
+.passage-gone-note {
+  display: block;
+  font-style: normal;
+}
+
+.passage-list {
+  border-top: 1px solid var(--bs-rule);
+  background: var(--bs-surface-1);
+}
+
+.passage-list-title {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+  margin: 0;
+  padding: var(--brand-space-2) var(--brand-space-3);
+  color: var(--bs-text-primary);
+  font-family: var(--brand-font-sans);
+  font-size: var(--brand-text-ui-md);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.passage-item {
+  display: grid;
+  gap: var(--brand-space-1-5);
+  padding: var(--brand-space-2) var(--brand-space-3);
+  border-top: 1px solid var(--bs-rule);
+}
+
+.passage-item--settled .passage-quote {
+  border-left-color: var(--bs-rule);
+}
+
+.passage-said {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--brand-space-2);
+  color: var(--bs-text-primary);
+  font-size: var(--brand-text-ui-md);
+}
+
+.passage-said p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.passage-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--brand-space-3);
+  margin: 0;
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+}
+
+.passage-foot a {
+  color: var(--bs-text-secondary);
+}
+
+.passage-foot a:hover {
+  color: var(--bs-coral-text);
+}
+
+/* The same passage, on the thread in the Overview. */
+.rev-thread-passage {
+  display: grid;
+  gap: var(--brand-space-0-5);
+  margin: 0 0 var(--brand-space-2);
+  padding: 0 0 0 var(--brand-space-2);
+  border-left: 3px solid var(--bs-status-warn-border);
+  font-size: var(--brand-text-ui-md);
+  font-style: italic;
+}
+
+.rev-thread-passage a {
+  color: var(--bs-text-secondary);
+  text-decoration: none;
+}
+
+.rev-thread-passage a:hover {
+  color: var(--bs-coral-text);
+  text-decoration: underline;
+}
+
+.rev-thread-passage cite {
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+  font-style: normal;
 }
 
 /* ── One document's panel ──────────────────────────────────────────────── */
@@ -7384,9 +8134,10 @@ a.cmp-branch:focus-visible {
   min-width: 0;
   margin: 0;
   color: var(--bs-text-primary);
-  font-family: var(--brand-font-mono);
-  font-size: var(--brand-text-ui-md);
-  font-weight: var(--brand-weight-medium);
+  /* The document's name, as its own page says it — not its address. */
+  font-family: var(--brand-font-sans);
+  font-size: var(--brand-text-ui-lg);
+  font-weight: var(--brand-weight-semibold);
 }
 
 /* Everything after the path keeps its size; only the path gives way. */
@@ -7502,12 +8253,14 @@ a.cmp-file-act {
 
 /* The document sits flush in its panel, the way a diff sits under its file's
    bar — not as a second bordered card inside the first. */
-.cmp-file-body:has(> .doc-compare, > .doc-preview) {
+.cmp-file-body:has(> .doc-compare, > .doc-preview, > .passage) {
   padding: 0;
 }
 
 .cmp-file-body > .doc-compare,
-.cmp-file-body > .doc-preview {
+.cmp-file-body > .doc-preview,
+.cmp-file-body .passage-page > .doc-compare,
+.cmp-file-body .passage-page > .doc-preview {
   border: none;
   border-radius: 0 0 var(--brand-radius-lg) var(--brand-radius-lg);
 }
@@ -7516,11 +8269,16 @@ a.cmp-file-act {
    folding a document did nothing until this said so. Empty is the same: two
    versions that read the same draw nothing, and the bar says what moved. */
 .cmp-file-body[hidden],
-.cmp-file-body:empty {
+.cmp-file-body:empty,
+/* Wrapped for comments, an empty document is an empty wrapper. */
+.cmp-file-body:has(> .passage > .passage-page:empty):not(:has(.passage-list)) {
   display: none;
 }
 
 .cmp-file-head:has(+ .cmp-file-body:empty),
+.cmp-file-head:has(+ .cmp-file-body > .passage > .passage-page:empty):not(
+    :has(+ .cmp-file-body .passage-list)
+  ),
 .cmp-file-head:last-child {
   border-bottom: none;
   border-radius: var(--brand-radius-lg);
@@ -7797,6 +8555,44 @@ a.cmp-file-act {
 
 /* The triangle, and the same width of nothing on a document — a ragged left
    edge is what makes a tree read as a list of unrelated things. */
+/* A folder row on a page that opens folders: the arrow, then the name as a
+   link to the folder's page. */
+.binder-tree-main--split {
+  cursor: default;
+}
+
+.binder-tree-twistybtn {
+  padding: 0;
+  border: none;
+  border-radius: var(--brand-radius-sm);
+  background: transparent;
+  cursor: pointer;
+}
+
+.binder-tree-twistybtn:hover {
+  background: var(--bs-surface-3);
+}
+
+.binder-tree-folderlink {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+  flex: 1;
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+}
+
+.binder-tree-folderlink:hover .binder-tree-label {
+  text-decoration: underline;
+}
+
+.binder-tree-twistybtn:focus-visible,
+.binder-tree-folderlink:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: 1px;
+}
+
 .binder-tree-twisty {
   width: 18px;
   height: 18px;
@@ -7829,6 +8625,35 @@ a.cmp-file-act {
 
 .binder-tree-row--folder .binder-tree-label {
   font-weight: var(--brand-weight-semibold);
+}
+
+/* **A document's name is never cut before its last change is.** The name
+   takes its own width; the change subject beside it is what shortens. */
+.binder-tree-row:not(.binder-tree-row--folder)
+  > .binder-tree-main:has(+ .binder-tree-subject) {
+  flex: 0 1 auto;
+}
+
+/* **All of the change's name, or none of it.** Beside the file panel and
+   the sign-off rail on a laptop the subject was squeezed to a letter or two
+   ("M", "Infection …"), which reads as a fault. Below 32rem of row it steps
+   aside whole and the name and the age have the row. The width is the row's
+   own, so this needs no breakpoint per layout: under 32rem the product is
+   negative and the maximum is zero, over it the maximum is out of reach. */
+.binder-tree-row > .binder-tree-subject {
+  max-width: max(0px, calc((100% - 32rem) * 999));
+}
+
+/* An uploaded file's format, after its name: "PDF", "DOCX". */
+.binder-tree-format {
+  flex-shrink: 0;
+  padding: 0 var(--brand-space-1);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-xs);
+  font-family: var(--brand-font-mono);
+  font-size: var(--brand-text-ui-xs);
+  letter-spacing: var(--brand-tracking-wide);
+  color: var(--bs-text-muted);
 }
 
 /* What a shut folder is hiding. Pushed right and quiet: it answers a question
@@ -7986,6 +8811,20 @@ a.cmp-file-act {
 
 /* Quiet, and not beside the filled button by accident: discarding is the one
    irreversible thing on this bar. */
+.bs-draftbar-confirm {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--brand-space-2);
+}
+
+.bs-draftbar-confirm-line {
+  color: var(--bs-text-primary);
+  font-size: var(--brand-text-ui-md);
+  font-weight: var(--brand-weight-medium);
+}
+
 .draft-bar-discard {
   color: var(--bs-text-secondary);
 }
@@ -8640,7 +9479,9 @@ a.bs-row:focus-visible {
   border-radius: var(--brand-radius-md);
   background: var(--bs-surface-2);
   box-sizing: border-box;
-  color: var(--bs-text-muted);
+  /* Secondary, not muted: a note is a sentence somebody reads, and muted on
+     this beige measures 4.23:1 (the design system's own rule). */
+  color: var(--bs-text-secondary);
   font-size: var(--brand-text-ui-md);
 }
 
@@ -8697,6 +9538,13 @@ a.bs-row:focus-visible {
 .bs-empty p {
   max-width: var(--brand-measure);
   margin: 0;
+}
+
+/* A folder's address with no folder behind it: the notice, and nothing
+   drawn as though the folder were there. The list stays mounted — it is
+   what reads the binder and finds the folder missing. */
+.binder-home--missing > :not(.bs-empty) {
+  display: none;
 }
 
 /* A page for an address with nothing behind it. */
@@ -10343,6 +11191,54 @@ a.bs-row:focus-visible {
   color: var(--bs-text-faint);
 }
 
+.app-explorer-folder {
+  cursor: default;
+}
+
+.app-explorer-folder--active {
+  background: var(--bs-surface-2);
+  color: var(--bs-text-primary);
+}
+
+/* The arrow opens and shuts in place; the name is a link to the folder's
+   page. Two targets on one row, as in Explorer's left pane. */
+.app-explorer-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: var(--brand-radius-sm);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.app-explorer-chevron:hover {
+  background: var(--bs-surface-3);
+}
+
+.app-explorer-folderlink {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+  flex: 1;
+  min-width: 0;
+  min-height: 28px;
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.app-explorer-chevron:focus-visible,
+.app-explorer-folderlink:focus-visible {
+  outline: 2px solid var(--brand-coral);
+  outline-offset: 1px;
+}
+
 .app-explorer-item {
   display: flex;
   align-items: center;
@@ -10815,6 +11711,28 @@ a.binder-latest-title:focus-visible {
   color: var(--bs-text-muted);
   font-size: var(--brand-text-ui-md);
   line-height: var(--brand-leading-normal);
+}
+
+.conflict-rules {
+  display: grid;
+  gap: var(--brand-space-3);
+  padding-bottom: var(--brand-space-4);
+}
+
+.conflict-rule-clash {
+  display: grid;
+  gap: var(--brand-space-2);
+  margin: 0 var(--brand-space-4);
+  padding: var(--brand-space-3) var(--brand-space-4);
+  border: 1px solid var(--bs-rule);
+  border-radius: var(--brand-radius-md);
+}
+
+.conflict-rule-option {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+  font-size: var(--brand-text-ui-md);
 }
 
 .conflict-whole {
@@ -11344,6 +12262,138 @@ html.bs-writing .app-main {
   outline-offset: 2px;
 }
 
+/* ── Who signs off here, on the editor's right (D16) ──────────────────────
+   The file panel's mirror: floating over the desk under the ribbon, shut to
+   a small button at the top right. It is positioned against the editor's
+   body, so the anchor takes no room of its own. */
+.doc-signoff-anchor {
+  z-index: var(--brand-z-raised);
+  flex: none;
+  width: 0;
+}
+
+.doc-signoff-launcher {
+  left: auto;
+  right: var(--brand-space-3);
+  z-index: var(--brand-z-raised);
+}
+
+.doc-signoff-float {
+  position: absolute;
+  top: var(--brand-space-3);
+  right: var(--brand-space-3);
+  bottom: var(--brand-space-3);
+  z-index: var(--brand-z-raised);
+  display: flex;
+  flex-direction: column;
+  width: 300px;
+  max-width: calc(100vw - var(--brand-space-12));
+  border: 1px solid var(--bs-rule-warm);
+  border-radius: var(--brand-radius-lg);
+  background: var(--bs-surface-1);
+  box-shadow: var(--bs-shadow-sm);
+  overflow: hidden;
+}
+
+.doc-signoff-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--brand-space-2);
+  padding: var(--brand-space-2) var(--brand-space-2) 0 var(--brand-space-3);
+}
+
+.doc-signoff-title {
+  margin: 0;
+  color: var(--bs-text-primary);
+  font-size: var(--brand-text-ui-md);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.doc-signoff-where {
+  margin: 0;
+  padding: var(--brand-space-1) var(--brand-space-3) var(--brand-space-2);
+  border-bottom: 1px solid var(--bs-rule-warm);
+  color: var(--bs-text-muted);
+  font-size: var(--brand-text-ui-sm);
+}
+
+.doc-signoff-where strong {
+  color: var(--bs-text-primary);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.doc-signoff-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.doc-signoff-body .signoff-section:first-of-type {
+  border-top: none;
+}
+
+.signoff-picker-field {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-1-5);
+  color: var(--bs-text-muted);
+}
+
+.signoff-picker-field .rev-picker-input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ── A folder on the editor's desk (4.5) ─────────────────────────────────
+   A head card, then the folder's list, between the two panels: the inline
+   padding is set from their measured widths. */
+.doc-folder-desk {
+  display: grid;
+  align-content: start;
+  gap: var(--brand-space-3);
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+.doc-folder-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--brand-space-3);
+  padding: var(--brand-space-3) var(--brand-space-4);
+}
+
+.doc-folder-icon {
+  display: grid;
+  place-items: center;
+  color: var(--bs-text-faint);
+}
+
+.doc-folder-text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.doc-folder-name {
+  color: var(--bs-text-primary);
+  font-size: var(--brand-text-ui-lg);
+  font-weight: var(--brand-weight-semibold);
+}
+
+.doc-folder-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--brand-space-2);
+}
+
+.doc-editor-status-kind {
+  color: var(--bs-text-muted);
+}
+
 /* Open: a card about as tall as the desk, inset from the ribbon above and
    the status bar below, as wide as its edge was last dragged. */
 .doc-files-float {
@@ -11429,6 +12479,28 @@ html:has(.doc-files-resize--active) {
   font-size: var(--brand-text-ui-md);
 }
 
+/* A folder's row: the arrow, then the name as its own button. The indent is
+   on the row, so the two sit together at the folder's depth. */
+.doc-files-folderrow {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-0-5);
+  flex: 1;
+  min-width: 0;
+  border-radius: var(--brand-radius-md);
+}
+
+.doc-files-folderrow .app-explorer-folder {
+  flex: 1;
+  min-width: 0;
+  padding-left: 0;
+}
+
+.doc-files-folderrow--active {
+  background: var(--bs-surface-2);
+  color: var(--bs-text-primary);
+}
+
 /* The tree takes the panel's spare height, so a right-click below the last
    row lands on it and opens the top level's menu. */
 .doc-files .app-explorer-tree {
@@ -11437,9 +12509,17 @@ html:has(.doc-files-resize--active) {
 
 /* Files | Outline: the binder's files, or the open document's headings. Two
    sides of one panel, switched in its head where its title was. */
+/* Four acts in the head now — New, Upload, New folder, Hide — so they sit
+   close, and the tabs give way before any of them is cut. */
+.doc-files .app-explorer-head {
+  gap: var(--brand-space-0-5);
+  padding-left: var(--brand-space-2);
+}
+
 .doc-files-tabs {
   display: inline-flex;
   flex: 1;
+  min-width: 0;
   align-self: stretch;
   gap: var(--brand-space-1);
   /* The ribbon's tabs: an underline on the head's own rule. */
@@ -11792,6 +12872,135 @@ html:has(.doc-files-resize--active) {
   margin-top: 0;
 }
 
+/* ── A document written in Bindersnap, read as it was written ─────
+   The editor sets a page the way Word does: 11pt, single spaced, 8pt after a
+   paragraph. The reader set the same document at 16px with half as much
+   again between the lines and larger gaps, so the page somebody approved did
+   not look like the page somebody wrote, or like the PDF it downloads as.
+   These are the editor's own measures (`.bs-doc-content` in
+   packages/editor/assets/document-editor.css), and
+   `writtenDocumentStyle.test.ts` fails when the two drift. Colours stay the
+   reader's, which follow the theme; the editor's page is always paper. A
+   Word file or Markdown keeps `.doc-preview-prose` alone: it has no page of
+   ours to match. */
+.doc-preview-prose.doc-preview-written {
+  color: var(--bs-text-primary);
+  font-family: var(--brand-font-sans);
+  font-size: 11pt;
+  line-height: 1.15;
+  overflow-wrap: break-word;
+}
+
+.doc-preview-prose.doc-preview-written p {
+  margin: 0 0 8pt;
+}
+
+.doc-preview-prose.doc-preview-written p.bs-title {
+  margin: 0 0 4pt;
+  font-size: 26pt;
+  font-weight: var(--brand-weight-semibold);
+  line-height: 1.15;
+}
+
+.doc-preview-prose.doc-preview-written p.bs-subtitle {
+  margin: 0 0 12pt;
+  color: var(--bs-text-secondary);
+  font-size: 15pt;
+  line-height: 1.2;
+}
+
+.doc-preview-prose.doc-preview-written h1,
+.doc-preview-prose.doc-preview-written h2,
+.doc-preview-prose.doc-preview-written h3,
+.doc-preview-prose.doc-preview-written h4,
+.doc-preview-prose.doc-preview-written h5,
+.doc-preview-prose.doc-preview-written h6 {
+  margin: 12pt 0 6pt;
+  font-weight: var(--brand-weight-semibold);
+  line-height: 1.2;
+}
+
+.doc-preview-prose.doc-preview-written > :first-child {
+  margin-top: 0;
+}
+
+.doc-preview-prose.doc-preview-written h1 {
+  font-size: 20pt;
+}
+
+.doc-preview-prose.doc-preview-written h2 {
+  font-size: 16pt;
+}
+
+.doc-preview-prose.doc-preview-written h3 {
+  font-size: 13pt;
+}
+
+.doc-preview-prose.doc-preview-written h4,
+.doc-preview-prose.doc-preview-written h5,
+.doc-preview-prose.doc-preview-written h6 {
+  font-family: var(--brand-font-sans);
+  font-size: 11pt;
+}
+
+.doc-preview-prose.doc-preview-written ul,
+.doc-preview-prose.doc-preview-written ol {
+  margin: 0 0 8pt;
+  padding-left: 0.35in;
+}
+
+.doc-preview-prose.doc-preview-written li {
+  margin-bottom: 0;
+}
+
+.doc-preview-prose.doc-preview-written li > p {
+  margin-bottom: 2pt;
+}
+
+.doc-preview-prose.doc-preview-written blockquote {
+  margin: 0 0 8pt;
+  padding-left: 0.2in;
+  font-style: italic;
+}
+
+.doc-preview-prose.doc-preview-written pre {
+  margin: 0 0 8pt;
+  padding: 0.12in 0.16in;
+  white-space: pre-wrap;
+}
+
+.doc-preview-prose.doc-preview-written code {
+  font-size: 0.92em;
+}
+
+.doc-preview-prose.doc-preview-written hr {
+  margin: 12pt 0;
+}
+
+.doc-preview-prose.doc-preview-written table {
+  margin: 0 0 8pt;
+  font-size: inherit;
+  table-layout: fixed;
+}
+
+.doc-preview-prose.doc-preview-written th,
+.doc-preview-prose.doc-preview-written td {
+  padding: 4pt 6pt;
+  vertical-align: top;
+}
+
+.doc-preview-prose.doc-preview-written th {
+  font-size: inherit;
+  font-weight: var(--brand-weight-semibold);
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.doc-preview-prose.doc-preview-written td > p,
+.doc-preview-prose.doc-preview-written th > p {
+  margin: 0;
+}
+
 /* Numbered sections: 1. Purpose, 2.1 Wards. Drawn, never typed, so they
    cannot fall out of step when a section is added in the middle. See
    `NumberedHeadings.ts`. */
@@ -11999,6 +13208,15 @@ html:has(.doc-files-resize--active) {
   margin: 0;
   padding: 0;
   min-width: 0;
+}
+
+.reviewer-chooser-need {
+  margin: 0;
+}
+
+.reviewer-chooser-can {
+  flex: none;
+  margin-left: auto;
 }
 
 .reviewer-chooser .bs-row {
@@ -12616,4 +13834,44 @@ html:has(.doc-files-resize--active) {
   color: var(--bs-text-secondary);
   font-size: var(--brand-text-ui-sm);
   cursor: pointer;
+}
+
+/* ── A group's page (4.8) ───────────────────────────────────────────────── */
+.group-page-title {
+  display: flex;
+  align-items: center;
+  gap: var(--brand-space-2);
+}
+
+.group-page-title svg {
+  color: var(--bs-text-faint);
+}
+
+.group-page-body {
+  display: grid;
+  gap: var(--brand-space-4);
+  max-width: 820px;
+}
+
+.org-group-page {
+  margin: 0;
+  padding: var(--brand-space-1) var(--brand-space-2) var(--brand-space-2)
+    var(--brand-space-8);
+  font-size: var(--brand-text-ui-sm);
+}
+
+.org-group-page a {
+  color: var(--bs-coral-text);
+}
+
+/* Settings' rule list: each rule links to where it is set (4.12). */
+.bs-settings-rules-target a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.bs-settings-rules-target a:hover,
+.bs-settings-rules-target a:focus-visible {
+  color: var(--bs-coral-text);
+  text-decoration: underline;
 }

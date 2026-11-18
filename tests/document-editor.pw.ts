@@ -19,7 +19,12 @@ import { randomUUID } from "node:crypto";
 
 import { expect, test, type Page } from "@playwright/test";
 
-import { API_BASE_URL, APP_BASE_URL } from "./helpers";
+import {
+  API_BASE_URL,
+  APP_BASE_URL,
+  openDraftPage,
+  openAddDocument,
+} from "./helpers";
 import { signUpAndConfirm } from "./mailpit";
 import { isCommitRef } from "../packages/utils/gitRef";
 import { LEGAL_VERSION } from "../packages/utils/legal";
@@ -286,7 +291,7 @@ test("a policy written here opens in the editor, and saves itself into your draf
 
   // Close is the way back to the document, still in the draft.
   await page.getByRole("button", { name: "Close", exact: true }).click();
-  await expect(page).toHaveURL(/\/hand-hygiene\?edit=1&draft=/);
+  await expect(page).toHaveURL(/\/-\/blob\/draft[^?]*hand-hygiene$/);
   await expect(page.locator(".doc-preview-prose")).toContainText(
     "Alcohol rub is enough",
   );
@@ -430,7 +435,7 @@ test("the draft is chosen, proposed and read from the editor, with no trip throu
   // Close reads the policy in that draft, and says so.
   await page.getByRole("button", { name: "Close", exact: true }).click();
   await expect(page).toHaveURL(
-    new RegExp(`/hand-hygiene\\?edit=1&draft=${encodeURIComponent(first)}`),
+    new RegExp(`/-/blob/${encodeURIComponent(first)}/[^?]*hand-hygiene$`),
   );
   await expect(page.locator(".doc-version-pill")).toHaveText(`In ${firstName}`);
   await expect(page.locator(".doc-preview-prose")).toContainText("Every time.");
@@ -446,10 +451,11 @@ test("the draft is chosen, proposed and read from the editor, with no trip throu
   await page
     .getByRole("menuitemradio", { name: new RegExp(`^${firstName}`) })
     .click();
+  // Read as a branch: the binder's own page, under the draft's name.
   await expect(page).toHaveURL(
-    new RegExp(`edit=1&draft=${encodeURIComponent(first)}`),
+    new RegExp(`/-/tree/${encodeURIComponent(first)}$`),
   );
-  await expect(page.locator(".bs-draftpick")).toContainText(firstName);
+  await expect(binderPicker).toHaveText(firstName);
 });
 
 test("Edit on a binder opens the editor, and its files are renamed and refiled there", async ({
@@ -510,14 +516,17 @@ test("Edit on a binder opens the editor, and its files are renamed and refiled t
   await expect(renamed).toContainText("Clean your hands");
   await expect(renamed).toContainText("Always.");
 
-  // Refiled from its row's menu, into the folder just made.
-  await files
-    .getByRole("button", { name: /^Hand Washing/ })
-    .click({ button: "right" });
-  await page
-    .getByRole("menu", { name: "Hand Washing: actions" })
-    .getByRole("menuitem", { name: "Move to…" })
-    .click();
+  // Refiled from its row's menu, into the folder just made. The panel is
+  // redrawn as the rename settles, and a right-click on the row it is
+  // replacing opens nothing, so press again until the menu is up.
+  const rowMenu = page.getByRole("menu", { name: "Hand Washing: actions" });
+  await expect(async () => {
+    await files
+      .getByRole("button", { name: /^Hand Washing/ })
+      .click({ button: "right" });
+    await expect(rowMenu).toBeVisible({ timeout: 2_000 });
+  }).toPass({ timeout: 30_000 });
+  await rowMenu.getByRole("menuitem", { name: "Move to…" }).click();
   await page.getByLabel("Where it goes").selectOption({ label: "Nursing" });
   await page.getByRole("button", { name: "Move", exact: true }).click();
   await expect(page).toHaveURL(
@@ -534,14 +543,16 @@ test("Edit on a binder opens the editor, and its files are renamed and refiled t
   // Closing saves the words at the new address, and lands on the policy
   // there, in the draft.
   await page.getByRole("button", { name: "Close", exact: true }).click();
-  await expect(page).toHaveURL(/\/nursing\/hand-washing\?edit=1/i);
+  await expect(page).toHaveURL(
+    /\/-\/blob\/draft[^?]*\/nursing\/hand-washing$/i,
+  );
   await expect(page.locator(".doc-preview-prose")).toContainText("Always.");
 
-  // And from the binder's own page, Organize is still the whole tree.
+  // The draft's own page is the binder read at the draft, with its bar.
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
-  await page.getByRole("button", { name: "Organize", exact: true }).click();
+  await openDraftPage(page);
   await expect(page.locator(".bs-draftbar")).toBeVisible();
-  await expect(page).toHaveURL(/edit=1/);
+  await expect(page).toHaveURL(/\/-\/tree\/draft/);
 });
 
 test("the policy is renamed from its title, and its unsaved words stay with it", async ({
@@ -1088,7 +1099,7 @@ test("a new policy can be written here instead of uploaded", async ({
   await signInBrowser(page, session);
 
   await page.goto(`${APP_BASE_URL}/${org}/${binder}`);
-  await page.getByRole("button", { name: "Add a document" }).click();
+  await openAddDocument(page);
   await page.getByRole("radio", { name: /Write it here/ }).check();
   await page.getByLabel("What it is called").fill("Visitor Policy");
   await page.getByRole("button", { name: "Start writing" }).click();
@@ -1864,7 +1875,7 @@ test("closing the editor lands on the policy with the draft bar, and Propose is 
   await expect(page.locator(".bs-draftbar")).toHaveCount(0);
 
   await page.getByRole("button", { name: "Close", exact: true }).click();
-  await expect(page).toHaveURL(/\/hand-hygiene\?edit=1&draft=/);
+  await expect(page).toHaveURL(/\/-\/blob\/draft[^?]*hand-hygiene$/);
   const bar = page.locator(".bs-draftbar");
   await expect(bar).toContainText("1 document changed", { timeout: 30_000 });
   await bar.getByRole("button", { name: "Propose" }).click();
@@ -1895,7 +1906,9 @@ test("the author edits an open change request in the editor, and saves into it",
   await expect(page).toHaveURL(/\/-\/changes\/\d+/, { timeout: 30_000 });
   const change = page.url().match(/\/-\/changes\/(\d+)/)![1]!;
 
-  // A reviewer asks for more. The author goes back in from the change itself.
+  // A reviewer asks for more. The author goes back in from the change itself,
+  // where its diff is.
+  await page.locator(".doc-tab", { hasText: "Changes" }).click();
   await page.getByRole("button", { name: "Edit Hand Hygiene" }).click();
   await expect(page).toHaveURL(
     new RegExp(`/hand-hygiene\\?edit=write&change=${change}`),
@@ -1987,7 +2000,7 @@ test("a proposed draft keeps its name, and its change's chip goes back into it",
   await expect(chip).toHaveText("Say when to wash");
   await chip.click();
   await expect(page).toHaveURL(
-    new RegExp(`edit=1&draft=${encodeURIComponent(branch)}`),
+    new RegExp(`/-/tree/${encodeURIComponent(branch)}$`),
   );
   const bar = page.locator(".bs-draftbar");
   await expect(bar).toContainText(`Proposed as change ${change}`);

@@ -611,9 +611,13 @@ export async function openBinderSection(
  * screen open themselves.
  */
 export async function openTreeFolder(page: Page, name: string): Promise<void> {
+  // The arrow is its own button where the name opens the folder's page —
+  // "Open Nursing here" — and the whole row is the button where it does not.
   const folder = page
     .locator(".binder-tree")
-    .getByRole("button", { name: new RegExp(`^${name}`) })
+    .getByRole("button", {
+      name: new RegExp(`^((Open|Shut) )?${name}( here)?`),
+    })
     .first();
   await expect(folder).toBeVisible({ timeout: 30_000 });
   if ((await folder.getAttribute("aria-expanded")) === "false") {
@@ -654,6 +658,7 @@ export async function waitForNoPendingReviews(
       .catch(() => false);
     if (canPublish) {
       await publishButton.click();
+      await page.getByRole("button", { name: "Publish now" }).click();
     }
 
     const publishingButton = page.getByRole("button", {
@@ -779,4 +784,43 @@ export async function agreeToTerms(page: Page): Promise<void> {
  */
 export async function acceptTermsForOrganization(page: Page): Promise<void> {
   await page.getByRole("checkbox", { name: /I accept the Terms/ }).check();
+}
+
+/**
+ * Open the page of your draft in this binder: the binder read at the draft
+ * (`/-/tree/{draft}`), where its bar proposes or discards it and Edit opens
+ * the editor in it. Opens (or resumes) the draft through the API first.
+ *
+ * This was `organizeBinder`, which went to the tree's own edit mode at
+ * `?edit=1`. That mode is retired: the editor's file panel organizes.
+ */
+export async function openDraftPage(page: Page): Promise<void> {
+  const [, org, binder] =
+    new URL(page.url()).pathname.match(/^\/([^/]+)\/([^/]+)/) ?? [];
+  if (!org || !binder) throw new Error(`Not on a binder: ${page.url()}`);
+  const response = await page.request.post(
+    `${API_BASE_URL}/api/app/binders/${org}/${binder}/draft`,
+    { headers: { Origin: APP_BASE_URL }, data: {} },
+  );
+  expect(response.ok(), await response.text()).toBe(true);
+  const { draft } = (await response.json()) as { draft: { branch: string } };
+  await page.goto(
+    `${APP_BASE_URL}/${org}/${binder}/-/tree/${encodeURIComponent(draft.branch)}`,
+  );
+  await expect(page.locator(".bs-draftbar")).toBeVisible({ timeout: 30_000 });
+}
+
+/**
+ * Open Add a document on the binder's page — the dialog the header's button
+ * used to open. The getting-started guide's `?add=1` opens the same dialog.
+ */
+export async function openAddDocument(page: Page): Promise<void> {
+  const url = new URL(page.url());
+  url.search = "?add=1";
+  await page.goto(url.toString());
+  await expect(
+    page.getByRole("heading", { name: "Add a document" }),
+  ).toBeVisible({
+    timeout: 30_000,
+  });
 }

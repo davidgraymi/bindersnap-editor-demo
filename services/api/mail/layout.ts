@@ -26,9 +26,9 @@ export interface EmailContent {
   /**
    * For an email a person can choose not to get: why they got it, and links
    * to their settings and to stop it. A reset link has none — it is not
-   * optional.
+   * optional. A reader with no account has no settings, only the link.
    */
-  optOut?: { reason: string; settingsUrl: string; unsubscribeUrl: string };
+  optOut?: { reason: string; settingsUrl?: string; unsubscribeUrl: string };
 }
 
 export interface RenderedEmail {
@@ -79,7 +79,11 @@ export function renderEmail(
     )
     .join("\n");
   const optOut = content.optOut
-    ? `${escapeHtml(content.optOut.reason)} <a href="${escapeHtml(content.optOut.settingsUrl)}" style="color: ${MUTED};">Email settings</a> · <a href="${escapeHtml(content.optOut.unsubscribeUrl)}" style="color: ${MUTED};">Unsubscribe</a><br><br>`
+    ? `${escapeHtml(content.optOut.reason)} ${
+        content.optOut.settingsUrl
+          ? `<a href="${escapeHtml(content.optOut.settingsUrl)}" style="color: ${MUTED};">Email settings</a> · `
+          : ""
+      }<a href="${escapeHtml(content.optOut.unsubscribeUrl)}" style="color: ${MUTED};">Unsubscribe</a><br><br>`
     : "";
   const preview = content.preview
     ? `<div style="display: none; max-height: 0; overflow: hidden;">${escapeHtml(content.preview)}</div>`
@@ -125,7 +129,9 @@ ${footnotes}
     ...(content.optOut
       ? [
           content.optOut.reason,
-          `Email settings: ${content.optOut.settingsUrl}`,
+          ...(content.optOut.settingsUrl
+            ? [`Email settings: ${content.optOut.settingsUrl}`]
+            : []),
           `Unsubscribe: ${content.optOut.unsubscribeUrl}`,
           "",
         ]

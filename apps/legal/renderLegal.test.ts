@@ -77,7 +77,7 @@ describe("the legal pages", () => {
       .update(JSON.stringify({ LEGAL_VERSION, AGREEMENT_WORDS }))
       .digest("hex")
       .slice(0, 16);
-    expect(pin).toBe("9260c2b487a159a2");
+    expect(pin).toBe("db2341e3207cbd05");
   });
 
   test("nobody is asked to accept a version that is not published yet", () => {

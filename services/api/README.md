@@ -55,6 +55,7 @@ The browser only receives a Bindersnap session cookie. Gitea access tokens stay 
 - `BINDERSNAP_MAIL_FROM`: The sender. Default `Bindersnap <notifications@bindersnap.com>`; SES only lets the API send as the `from_address` in `infra/email`.
 - `BINDERSNAP_MAILPIT_URL`: Mailpit's HTTP API, for `mailpit`. Default `http://mailpit:8025`.
 - `BINDERSNAP_API_ORIGIN`: The API's public origin, for links that must reach the API rather than the app (an email's one-click unsubscribe). Default `http://localhost:$API_PORT`.
+- `BINDERSNAP_SITE_ORIGIN`: The public site's origin, where "Email it to me" sends its reader back and where its email's links lead. Default `https://bindersnap.com`; the local stack sets its own `SITE_PORT`.
 - `AWS_REGION`: The SES region. Default `us-east-1`.
 - `LOG_LEVEL`: Logger verbosity. One of `debug`, `info`, `warn`, `error`. Defaults to `info` in production and `debug` otherwise.
 

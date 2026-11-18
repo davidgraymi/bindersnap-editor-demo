@@ -44,6 +44,11 @@ export interface BinderAddress {
   ref: string | null;
   /** A file in the binder, when the address is one. */
   documentPath: string | null;
+  /**
+   * A folder in the binder, when the address is one: `/-/tree/{ref}/{path}`.
+   * Null is the binder's top, which is a folder too (its root).
+   */
+  folder: string | null;
   /** The archive — what this binder has taken off the record. */
   archive: boolean;
 }
@@ -54,8 +59,25 @@ const HOME: BinderAddress = {
   view: "discussion",
   ref: null,
   documentPath: null,
+  folder: null,
   archive: false,
 };
+
+function decodeSegments(parts: readonly string[]): string {
+  return parts
+    .filter((part) => part !== "")
+    .map((part) => decodeRef(part))
+    .join("/");
+}
+
+/** A folder path as an address: each segment encoded, the slashes kept. */
+export function encodeFolderPath(folder: string): string {
+  return folder
+    .split("/")
+    .filter((part) => part !== "")
+    .map((part) => encodeURIComponent(part))
+    .join("/");
+}
 
 function decodeRef(segment: string): string {
   try {
@@ -89,8 +111,15 @@ export function parseBinderAddress(
   const cameFrom = parsePositiveIntParam(search, "change");
 
   switch (screen) {
-    case "tree":
-      return parts[0] ? { ...HOME, ref: decodeRef(parts[0]) } : HOME;
+    case "tree": {
+      if (!parts[0]) return HOME;
+      const folder = decodeSegments(parts.slice(1));
+      return {
+        ...HOME,
+        ref: decodeRef(parts[0]),
+        folder: folder === "" ? null : folder,
+      };
+    }
     case "blob": {
       const [ref, ...file] = parts;
       if (!ref || file.length === 0) return HOME;
@@ -167,6 +196,7 @@ export function parseLegacyBinderQuery(search: string): BinderAddress {
         : "discussion",
     ref: ref === "" ? null : ref,
     documentPath: null,
+    folder: null,
     archive: params.get("archive") === "1",
   };
 }
@@ -240,6 +270,11 @@ export function buildBinderUrl(params: {
   archive?: boolean;
   /** Read the binder's documents at a branch rather than on `main`. */
   ref?: string | null;
+  /**
+   * A folder's page: `/-/tree/{ref}/{folder}`, on `main` when no ref is named.
+   * Empty or null is the binder's own page.
+   */
+  folder?: string | null;
 }): string {
   const {
     org,
@@ -251,7 +286,9 @@ export function buildBinderUrl(params: {
     draft = null,
     archive = false,
     ref = null,
+    folder = null,
   } = params;
+  const folderPath = folder ? encodeFolderPath(folder) : "";
   const base = `/${org}/${binder}`;
   const query = new URLSearchParams();
   let path: string;
@@ -284,7 +321,12 @@ export function buildBinderUrl(params: {
   ) {
     path = `/-/settings/${tab}`;
   } else {
-    path = ref ? `/-/tree/${encodeURIComponent(ref)}` : "";
+    path =
+      folderPath !== ""
+        ? `/-/tree/${encodeURIComponent(ref ?? DEFAULT_REF)}/${folderPath}`
+        : ref
+          ? `/-/tree/${encodeURIComponent(ref)}`
+          : "";
     // Not editing is the ordinary state, so it says nothing — the binder's
     // own address stays the short one.
     if (edit === "editing") query.set("edit", "1");

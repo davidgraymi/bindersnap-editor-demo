@@ -41,6 +41,8 @@ import type {
   ProposedDraftPayload,
   PublishedWorkspaceChangePayload,
   SignOffRuleView,
+  BinderSignOffPayload,
+  OrganizationGroupPagePayload,
   WorkspaceChangeDetailPayload,
   WorkspaceChangeListPayload,
   WorkspaceDocumentDetailPayload,
@@ -68,6 +70,7 @@ import type {
   ChangeUpdatesPayload,
   ClosedChangesPayload,
   CollaboratorListPayload,
+  DiscussionAnchor,
   DiscussionSummary,
   DocumentDetailPayload,
   DocumentHistoryPayload,
@@ -128,6 +131,7 @@ export type {
   CollaboratorListPayload,
   DiscussionComment,
   DiscussionSummary,
+  DiscussionAnchor,
   DiscussionThread,
   DocumentDetailPayload,
   DocumentHistoryPayload,
@@ -626,7 +630,12 @@ export async function submitDocumentReview(
 export async function updateChangeAssignments(
   scope: ChangeScope,
   pullNumber: number,
-  updates: { assignee?: string | null; reviewers?: string[] },
+  updates: {
+    assignee?: string | null;
+    reviewers?: string[];
+    /** Everybody besides the author who may edit the change. */
+    coEditors?: string[];
+  },
 ): Promise<ChangeAssignments> {
   try {
     const response = await BindersClient.updateBinderChangeAssignments(
@@ -696,13 +705,15 @@ export async function createChangeDiscussion(
   scope: ChangeScope,
   pullNumber: number,
   body: string,
+  /** The passage the comment is about, when it is about one. */
+  anchor?: DiscussionAnchor | null,
 ): Promise<DiscussionSummary> {
   try {
     const response = await BindersClient.createBinderChangeDiscussion(
       scope.org,
       scope.binder,
       String(pullNumber),
-      { body },
+      anchor ? { body, anchor } : { body },
     );
     return response.data;
   } catch (error) {
@@ -1007,31 +1018,6 @@ export async function setBinderRules(
   },
 ): Promise<BinderRulesPayload> {
   const response = await BindersClient.setBinderRules(org, binder, rules);
-  return response.data;
-}
-
-/**
- * Propose new per-folder sign-off rules.
- *
- * **Returns a change, not a success.** `main` is protected, so the rules that
- * decide who approves are themselves approved — and a caller holding a change
- * number cannot report otherwise. The whole set is sent rather than a patch:
- * the file is regenerated from what arrives, so omitting a rule would delete
- * it, and sending everything makes that impossible to do by accident.
- */
-export async function proposeBinderSignOff(
-  org: string,
-  binder: string,
-  rules: Array<{
-    scope: SignOffRuleView["scope"];
-    target: string;
-    teams: string[];
-    users: string[];
-  }>,
-): Promise<{ changeNumber: number; branch: string }> {
-  const response = await BindersClient.proposeBinderSignOffRules(org, binder, {
-    rules,
-  });
   return response.data;
 }
 
@@ -1354,6 +1340,71 @@ export async function fetchBinderSettings(
 }
 
 /**
+ * Who signs off in a binder: on `main`, or as your own draft (or a change)
+ * has it. The sign-off panel works out what applies to the place it is on.
+ */
+export async function fetchBinderSignOff(
+  org: string,
+  binder: string,
+  at: {
+    draft?: string | null;
+    change?: number | null;
+    ref?: string | null;
+  } = {},
+  request?: ReadRequest,
+): Promise<BinderSignOffPayload> {
+  const response = await BindersClient.getBinderSignOff(
+    org,
+    binder,
+    {
+      ...(at.draft ? { draft: at.draft } : {}),
+      ...(at.change ? { change: String(at.change) } : {}),
+      ...(at.ref && at.ref !== "main" ? { ref: at.ref } : {}),
+    },
+    request,
+  );
+  return response.data;
+}
+
+/**
+ * Set who signs off on one thing, in a draft: one act, like a rename. Empty
+ * owners take the rule away.
+ */
+export async function setBinderSignOffRule(
+  org: string,
+  binder: string,
+  rule: SignOffRuleView,
+  target: ActTarget,
+): Promise<BinderShapeChangePayload> {
+  try {
+    const response = await BindersClient.setBinderSignOffRule(org, binder, {
+      rule,
+      ...jsonTarget(target),
+    });
+    return response.data;
+  } catch (error) {
+    handlePaymentRequired(
+      `/api/app/binders/${org}/${binder}/rules/sign-off`,
+      error,
+    );
+  }
+}
+
+/** One group's page: its people, its binders, and where it signs off. */
+export async function fetchOrganizationGroup(
+  org: string,
+  group: string,
+  request?: ReadRequest,
+): Promise<OrganizationGroupPagePayload> {
+  const response = await OrganizationsClient.getOrganizationGroup(
+    org,
+    group,
+    request,
+  );
+  return response.data;
+}
+
+/**
  * The binder's contents — on the record, or as they stand in your own draft.
  *
  * Edit mode passes its draft branch because it has to see what it has just
@@ -1649,7 +1700,14 @@ export async function reviseBinderDocument(
    * The editor saved on its own: into a draft nobody has been shown, the
    * server may fold this into the last save of the same document.
    */
-  options: { fold?: boolean } = {},
+  options: {
+    fold?: boolean;
+    /**
+     * The git blob SHA of the file this was written on. The server refuses
+     * the save when somebody has saved over it since.
+     */
+    basedOn?: string;
+  } = {},
 ): Promise<CreatedWorkspaceDocumentPayload> {
   try {
     const response = await BindersClient.reviseBinderDocument(org, binder, {
@@ -1658,6 +1716,7 @@ export async function reviseBinderDocument(
       ...multipartTarget(target),
       ...(source ? { source } : {}),
       ...(options.fold ? { fold: "true" as const } : {}),
+      ...(options.basedOn ? { basedOn: options.basedOn } : {}),
     });
     return response.data;
   } catch (error) {

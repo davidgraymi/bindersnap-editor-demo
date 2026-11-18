@@ -21,6 +21,8 @@ import {
   fetchBinderHistory,
   fetchBinderPeople,
   fetchBinderSettings,
+  fetchBinderSignOff,
+  fetchOrganizationGroup,
   fetchBillingStatus,
   fetchLibrary,
   fetchNotificationCount,
@@ -115,6 +117,19 @@ export const queryKeys = {
     ["binders", org, binder, "draft", branch ?? null] as const,
   binderSettings: (org: string, binder: string) =>
     ["binders", org, binder, "settings"] as const,
+  /** Who signs off, on `main` or at a draft or a change. */
+  binderSignOff: (org: string, binder: string, at: SignOffAt = {}) =>
+    [
+      "binders",
+      org,
+      binder,
+      "sign-off",
+      at.draft ?? null,
+      at.change ?? null,
+      at.ref ?? null,
+    ] as const,
+  organizationGroup: (org: string, group: string) =>
+    ["organizations", org, "groups", group] as const,
   binderPeople: (org: string, binder: string) =>
     ["binders", org, binder, "people"] as const,
 
@@ -389,6 +404,34 @@ export function binderDraftQuery(org: string, binder: string, branch?: string) {
 }
 
 /** A binder's rules and sign-off. */
+/**
+ * Where "Who signs off" is read: your draft, a change's branch, or any
+ * branch, as `/-/tree/{ref}` reads its documents. Nothing is `main`.
+ */
+export interface SignOffAt {
+  draft?: string | null;
+  change?: number | null;
+  ref?: string | null;
+}
+
+export function binderSignOffQuery(
+  org: string,
+  binder: string,
+  at: SignOffAt = {},
+) {
+  return queryOptions({
+    queryKey: queryKeys.binderSignOff(org, binder, at),
+    queryFn: ({ signal }) => fetchBinderSignOff(org, binder, at, { signal }),
+  });
+}
+
+export function organizationGroupQuery(org: string, group: string) {
+  return queryOptions({
+    queryKey: queryKeys.organizationGroup(org, group),
+    queryFn: ({ signal }) => fetchOrganizationGroup(org, group, { signal }),
+  });
+}
+
 export function binderSettingsQuery(org: string, binder: string) {
   return queryOptions({
     queryKey: queryKeys.binderSettings(org, binder),

@@ -3,14 +3,20 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { WorkspaceChangeDetailPayload } from "../../../packages/api-schema/schemas/workspaces";
 import { useMarkNotificationsRead } from "../data/notifications";
-import { binderChangeQuery, queryKeys } from "../data/queries";
 import {
+  binderChangeQuery,
+  changeDiscussionsQuery,
+  queryKeys,
+} from "../data/queries";
+import { useIsReadOnly } from "../readOnlyContext";
+import {
+  createChangeDiscussion,
   downloadBinderDocument,
   editBinderChange,
   setBinderChangeOpen,
   updateBinderChange,
 } from "../api";
-import { followInApp } from "../appLink";
+import { followInApp, navigateToHref } from "../appLink";
 import {
   binderChangeDetailToRecord,
   describeChangedDocument,
@@ -20,15 +26,31 @@ import { buildBinderUrl } from "../binderShell";
 import { buildChangedDocumentRows } from "../changedDocuments";
 import type { ChangeScope } from "../changeScope";
 import { formatDocumentName } from "../documentDisplay";
+import { usePageTitle } from "../pageTitle";
+import { HelpLink } from "./HelpLink";
 import type { DocumentChangeView } from "../routes";
 import { nameFor, usePeopleNames } from "../usePeopleNames";
 import { ChangeByline } from "./ChangeByline";
+import { ChangeCoEditors } from "./ChangeCoEditors";
 import { ChangeComparisonPage } from "./ChangeComparisonPage";
 import { ChangeConflictsPage } from "./ChangeConflictsPage";
 import { ChangeStateBadge, ChangeTabs } from "./ChangeTabs";
 import { ApprovalRules } from "./ApprovalRules";
 import { DocumentChangeDetail } from "./DocumentChangeDetail";
 import { SkeletonGroup, SkeletonLine } from "./Skeleton";
+import { RuleChangeSection, RULE_CHANGE_ANCHOR } from "./RuleChangeSection";
+import { PersonAvatar } from "./PersonAvatar";
+import { routeToPath, type AppRoute } from "../routes";
+import { formatShortDate } from "../documentDisplay";
+import { describeGroupName } from "../../../packages/utils/groupName";
+import {
+  approvalCountsToward,
+  ruleChangeCount,
+  ruleChangeRows,
+  rulesWarning,
+  startsNextNote,
+  describeWaiting,
+} from "../signOffChange";
 
 /**
  * One change in a binder, at `/{org}/{binder}/-/changes/3`.
@@ -107,6 +129,13 @@ export function BinderChangePage({
   const names = usePeopleNames(org);
   const queryClient = useQueryClient();
   const read = useQuery(binderChangeQuery(org, binder, changeNumber));
+  // The change's discussions, for the comments made on passages of its
+  // documents. Read only on the Changes tab, which is where they are drawn.
+  const discussions = useQuery({
+    ...changeDiscussionsQuery(org, binder, changeNumber),
+    enabled: view === "compare",
+  });
+  const isReadOnly = useIsReadOnly();
   const detail: WorkspaceChangeDetailPayload | null = read.data ?? null;
   const error = read.error
     ? read.error.message || "Unable to open this change."
@@ -184,6 +213,13 @@ export function BinderChangePage({
   const record = useMemo(
     () => (detail ? binderChangeDetailToRecord(detail) : null),
     [detail],
+  );
+
+  // The tab says what the change is called, not only its number.
+  usePageTitle(
+    record
+      ? [record.summary, `Change ${changeNumber}`, formatDocumentName(binder)]
+      : null,
   );
 
   /**
@@ -311,6 +347,103 @@ export function BinderChangePage({
     change: changeNumber,
     view: "compare",
   });
+
+  // **What this change does to who signs off** (4.9–4.11), from the
+  // server's rule diff: drawn first on the Changes tab, named in the byline,
+  // and said at the moment of approval.
+  const binderName = formatDocumentName(binder);
+  const navigate = (route: AppRoute) => {
+    window.history.pushState({}, "", routeToPath(route));
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  };
+  const ruleChanges = detail.signOffChange?.rules ?? [];
+  const changesRules = detail.signOffChange !== null && ruleChanges.length > 0;
+  const ruleHref = `${changesHref}#${RULE_CHANGE_ANCHOR}`;
+  const openRuleChange = () => {
+    onViewChange("compare");
+    window.setTimeout(
+      () =>
+        document
+          .getElementById(RULE_CHANGE_ANCHOR)
+          ?.scrollIntoView({ block: "start" }),
+      300,
+    );
+  };
+  const rulesOwnerNames = detail.approvalRules
+    .filter((rule) => rule.reason.kind === "rules")
+    .flatMap((rule) =>
+      rule.groups.map((group) => `the ${describeGroupName(group)}`),
+    );
+  const startsNext = changesRules ? startsNextNote(ruleChanges) : null;
+  const ruleSection = changesRules ? (
+    <RuleChangeSection
+      org={org}
+      binder={binder}
+      rows={ruleChangeRows(ruleChanges, binderName)}
+      rulesOwners={
+        rulesOwnerNames.length === 0
+          ? null
+          : rulesOwnerNames.length === 1
+            ? rulesOwnerNames[0]!
+            : `${rulesOwnerNames.slice(0, -1).join(", ")} and ${rulesOwnerNames[rulesOwnerNames.length - 1]}`
+      }
+      startsNext={startsNext}
+      onNavigate={navigate}
+    />
+  ) : null;
+
+  // Who each approver approves for, for "Approver · Policy Office": the
+  // groups of the sign-off rules they can meet, at most two. The binder's
+  // approvers list can name every group, and saying all of them says nothing.
+  const approverGroups = new Map<string, string[]>();
+  for (const rule of detail.approvalRules) {
+    if (rule.kind !== "sign-off") continue;
+    for (const user of rule.eligible) {
+      const key = user.login.toLowerCase();
+      const known = approverGroups.get(key) ?? [];
+      for (const group of rule.groups) {
+        if (!known.includes(group) && known.length < 2) known.push(group);
+      }
+      approverGroups.set(key, known);
+    }
+  }
+
+  // What publishing is still waiting for, said as what is needed rather
+  // than as a list of everybody who could give it.
+  const waitingLine = isOpen
+    ? describeWaiting(detail.approvalRules, (login) => nameFor(names, login))
+    : null;
+
+  // Where a published change's documents now stand: the way on from it.
+  const publishedLinks =
+    record.outcome === "published" && detail.documents.length > 0 ? (
+      <ul className="rev-outcome-links">
+        {detail.documents.map((document) => {
+          const href = buildDocumentUrl({
+            org,
+            binder,
+            documentPath: document.slugPath,
+            version: null,
+          });
+          return (
+            <li key={document.slugPath}>
+              <a
+                href={href}
+                onClick={(event) =>
+                  followInApp(event, () => navigateToHref(href))
+                }
+              >
+                {formatDocumentName(document.name)}
+              </a>
+              {document.currentVersion
+                ? ` is now version ${document.currentVersion.version}`
+                : " is on the record"}
+            </li>
+          );
+        })}
+      </ul>
+    ) : null;
+
   const tabs = (
     <ChangeTabs
       view={view}
@@ -382,6 +515,32 @@ export function BinderChangePage({
       <div className="binder-pane">
         <ChangeComparisonPage
           key={changeNumber}
+          passages={{
+            threads: discussions.data?.threads ?? [],
+            // A decided change is the record: nothing is added to it.
+            canComment: isOpen && !isReadOnly,
+            onComment: async (anchor, body) => {
+              const next = await createChangeDiscussion(
+                { org, binder, documentPath: "" },
+                changeNumber,
+                body,
+                anchor,
+              );
+              queryClient.setQueryData(
+                queryKeys.changeDiscussions(org, binder, changeNumber),
+                next,
+              );
+            },
+            threadHref: (threadId) =>
+              `${buildBinderUrl({
+                org,
+                binder,
+                tab: "changes",
+                change: changeNumber,
+              })}#thread-${threadId}`,
+          }}
+          ruleSection={ruleSection}
+          ruleCount={changesRules ? ruleChangeCount(ruleChanges) : null}
           org={org}
           binder={binder}
           changeNumber={changeNumber}
@@ -417,6 +576,18 @@ export function BinderChangePage({
             }
           }}
           onDownload={(row, gitRef) => void handleRowDownload(row, gitRef)}
+          /* Its author or a co-editor, only while it is open, and only a
+             document the editor writes: a Word file is revised in Word and
+             uploaded. */
+          editFor={(row) =>
+            onEditInEditor &&
+            record.open &&
+            detail.change.branchName !== "" &&
+            detail.viewer.canEdit &&
+            isEditorDocumentFile(row.path)
+              ? () => onEditInEditor(row.slugPath)
+              : null
+          }
           status={status}
           tabs={tabs}
         />
@@ -458,13 +629,17 @@ export function BinderChangePage({
             Choose what each clash should say to bring this change up to date.
             {detail.clearsApprovalsOnEdit
               ? " That changes what it proposes, so approvals already given are cleared and asked for again."
-              : " This binder keeps approvals already given through later edits."}
+              : " This binder keeps approvals already given through later edits."}{" "}
+            <HelpLink guide="out-of-date" section="Resolve conflicts">
+              How resolving works
+            </HelpLink>
           </p>
         ) : (
           <p>
             <strong>The binder has moved on since this change was made.</strong>{" "}
             Updating it pulls in everything published since. What this change
-            proposes stays the same, so approvals already given stay too.
+            proposes stays the same, so approvals already given stay too.{" "}
+            <HelpLink guide="out-of-date">Why this happens</HelpLink>
           </p>
         )}
         {detail.hasConflicts ? (
@@ -506,97 +681,78 @@ export function BinderChangePage({
             onOpenBranch={openBranch}
             openedAt={record.submittedAt}
             nameOf={nameOf}
+            changesRules={changesRules}
+            showFrom={false}
           />
         }
-        banner={behind}
-        documentPicker={
-          documents.length > 0 ? (
-            /* **What this change does, document by document.** A change is the
-               unit of approval and routinely touches several, and this panel
-               was a picker rather than an answer: it showed the raw filename,
-               identity segment and all, and left the one thing a reviewer
-               wants — what happens to each — to a version string in the
-               header that changed as you clicked. */
-            <div className="bs-panel change-does">
-              <div className="bs-panel-bar">
-                <h2 className="bs-panel-bar-title">What this change does</h2>
-                <span className="bs-panel-bar-spacer" />
-                <span className="binder-count">
-                  {documents.length === 1
-                    ? "1 document"
-                    : `${documents.length} documents`}
-                </span>
-              </div>
-              <ul className="bs-row-list">
-                {documents.map((document) => {
-                  const facts = describeChangedDocument(document, !isOpen);
-                  const anchor = comparisonRows.find(
-                    (row) => row.slugPath === document.slugPath,
-                  )?.anchor;
-
-                  /* **Back into the words, in this change.** A reviewer's
-                     "please reword step 3" meant a new draft, the edit, and a
-                     second change for the same policy. Only its author, only
-                     while it is open, and only a policy the editor writes — a
-                     Word file is revised in Word and uploaded. */
-                  const editable =
-                    onEditInEditor &&
-                    record.open &&
-                    detail.change.branchName !== "" &&
-                    record.submittedBy === currentUser &&
-                    isEditorDocumentFile(document.path);
-
-                  return (
-                    <li key={document.slugPath} className="change-does-item">
-                      {/* **A way into its diff, not a selector.** Picking a
-                          row used to repoint the rail at that document, so
-                          seeing what changed was pick, then Compare — when
-                          what a reviewer does is open Changes and scroll.
-                          Each row now goes straight to its own place on
-                          that screen. */}
-                      <a
-                        className="bs-row"
-                        href={`${changesHref}${anchor ? `#${anchor}` : ""}`}
-                        onClick={(event) =>
-                          followInApp(event, () => {
-                            setViewing(document.slugPath);
-                            onViewChange("compare");
-                          })
-                        }
-                      >
-                        <span className="bs-row-body">
-                          <span className="bs-row-name">{facts.title}</span>
-                          {/* The address, not the file path: the identity
-                              segment is a thing the server mints and nobody
-                              reads. */}
-                          <span className="bs-row-meta">{facts.address}</span>
-                        </span>
-                        <span className="bs-row-right">
-                          {facts.move ? (
-                            <span className="bs-status bs-status--working">
-                              {facts.move}
-                            </span>
-                          ) : null}
-                          <span className="bs-ver">{facts.effect}</span>
-                        </span>
-                      </a>
-                      {editable ? (
-                        <button
-                          className="bs-btn bs-btn--sm bs-btn-secondary"
-                          type="button"
-                          aria-label={`Edit ${facts.title}`}
-                          onClick={() => onEditInEditor?.(document.slugPath)}
-                        >
-                          Edit
-                        </button>
-                      ) : null}
-                    </li>
-                  );
-                })}
-              </ul>
+        aboutPanel={
+          <section className="bs-panel" aria-labelledby="change-about">
+            <div className="bs-panel-bar">
+              <h2 className="bs-panel-bar-title" id="change-about">
+                About this change
+              </h2>
             </div>
-          ) : null
+            <dl className="change-about">
+              {/* Once a change is published its draft is gone, and what is
+                  left of the branch is Gitea's own name for it
+                  (`refs/pull/20/head`), which is nobody's to read. */}
+              {branchName && !branchName.startsWith("refs/") ? (
+                <>
+                  <dt>From</dt>
+                  <dd>
+                    <a
+                      className="cmp-branch"
+                      href={branchHref}
+                      title={branchName}
+                      onClick={(event) => followInApp(event, openBranch)}
+                    >
+                      <span className="cmp-branch-label">
+                        {branchLabel ?? branchName}
+                      </span>
+                    </a>
+                  </dd>
+                </>
+              ) : null}
+              <dt>Opened</dt>
+              <dd>
+                {formatShortDate(record.submittedAt)} by{" "}
+                {nameOf(record.submittedBy)}
+              </dd>
+              {/* Who besides its author may change what it proposes. It was
+                  "Assignee", a name on the change that did nothing. */}
+              <dt>Co-editors</dt>
+              <dd>
+                <ChangeCoEditors
+                  org={org}
+                  binder={binder}
+                  changeNumber={changeNumber}
+                  author={record.submittedBy}
+                  coEditors={detail.coEditors}
+                  canName={detail.viewer.canNameCoEditors && !isReadOnly}
+                  nameOf={nameOf}
+                />
+              </dd>
+            </dl>
+          </section>
         }
+        waitingLine={waitingLine}
+        approverGroups={approverGroups}
+        approveNotes={
+          changesRules
+            ? {
+                warning: rulesWarning(ruleChanges, binderName),
+                countsToward: approvalCountsToward(
+                  detail.approvalRules,
+                  currentUser,
+                ),
+                ruleHref,
+                onOpenRule: openRuleChange,
+              }
+            : null
+        }
+        banner={behind}
+        /* No "What this change does" (D9): it repeated the Changes tab. */
+        documentPicker={null}
         approvers={[
           ...new Set(
             detail.approvalRules.flatMap((rule) =>
@@ -604,7 +760,17 @@ export function BinderChangePage({
             ),
           ),
         ]}
-        approvalPanel={<ApprovalRules rules={detail.approvalRules} />}
+        approvalPanel={
+          <ApprovalRules
+            rules={detail.approvalRules}
+            org={org}
+            binderName={binderName}
+            onNavigate={navigate}
+            ruleChangeHref={ruleHref}
+            onOpenRuleChange={openRuleChange}
+            startsNext={startsNext}
+          />
+        }
         onOpenSignOffRules={onOpenSignOffRules}
         onEditSubject={async (subject) => {
           await editBinderChange(org, binder, changeNumber, subject);
@@ -640,7 +806,7 @@ export function BinderChangePage({
         // nothing. Saying so replaces the version wording and the file panel,
         // both of which would otherwise be false.
         subject={
-          shown
+          shown || changesRules
             ? null
             : {
                 title: "Who signs off on each folder",
@@ -649,11 +815,15 @@ export function BinderChangePage({
               }
         }
         documentName={
-          shown ? formatDocumentName(shown.name) : `this binder's rules`
+          shown
+            ? formatDocumentName(shown.name)
+            : changesRules
+              ? "who signs off"
+              : `this binder's rules`
         }
         onChanged={load}
         onViewChange={onViewChange}
-        onBackToList={onBackToChanges}
+        outcomeAfter={publishedLinks}
       />
     </div>
   );

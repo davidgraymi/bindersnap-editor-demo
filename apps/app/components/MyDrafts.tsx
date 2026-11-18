@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { PencilLine } from "lucide-react";
+import { AppIcon, ICON } from "./AppIcon";
 
 import type { MyDraft } from "../../../packages/api-schema/schemas/workspaces";
 import { followInApp, navigateToHref } from "../appLink";
@@ -18,6 +18,15 @@ import { SkeletonPanel } from "./Skeleton";
  * plainly which are not proposed yet, and puts them first. Only your own —
  * a draft is private until it is proposed.
  */
+/**
+ * Has anything been done in it? A proposed draft always counts: it is a
+ * change request. Counted in acts, not documents, so a draft that only moves
+ * a folder or changes who signs off is work too.
+ */
+export function holdsWork(draft: MyDraft): boolean {
+  return draft.changeNumber !== null || draft.actCount > 0;
+}
+
 export function MyDrafts({
   org,
   binder,
@@ -45,7 +54,11 @@ export function MyDrafts({
     return <SkeletonPanel label="Gathering your drafts" rows={3} bar right />;
   }
 
-  const drafts = query.data.drafts;
+  // **A draft with nothing in it is not listed.** Pressing Edit opens a
+  // draft, so somebody who only looked had a row here reading "Nothing
+  // changed yet" for every binder they had opened. It is still their draft,
+  // and Edit carries on in it; it is listed once it holds something.
+  const drafts = query.data.drafts.filter(holdsWork);
   const waiting = drafts.filter((draft) => draft.changeNumber === null);
   const proposed = drafts.filter((draft) => draft.changeNumber !== null);
   // The binder is said on each row only where the list spans binders.
@@ -78,12 +91,15 @@ export function MyDrafts({
         : buildBinderUrl({
             org: draft.organization,
             binder: draft.workspace,
-            edit: "editing",
+            // The editor, where the work was being done — not the
+            // organizing view, where carrying on meant pressing Edit again.
+            edit: "writing",
             draft: draft.branch,
           });
     const changed =
       draft.documentCount === 0
-        ? "Nothing changed yet"
+        ? // Listed, so something was done: a folder moved, a rule changed.
+          "Folders or sign-off changed"
         : draft.documentCount === 1
           ? "1 document changed"
           : `${draft.documentCount} documents changed`;
@@ -94,11 +110,10 @@ export function MyDrafts({
         key={`${draft.organization}/${draft.workspace}/${draft.branch}`}
       >
         <span className="bs-row-icon">
-          <PencilLine
+          <AppIcon
+            icon={ICON.draft}
+            size="md"
             className="change-row-icon change-row-icon--open"
-            size={16}
-            strokeWidth={1.75}
-            aria-hidden="true"
           />
         </span>
         <a

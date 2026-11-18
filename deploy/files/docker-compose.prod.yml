@@ -138,6 +138,7 @@ services:
       # link the API builds — emails, Stripe's return URLs — starts with it.
       - BINDERSNAP_APP_ORIGIN=https://app.bindersnap.com
       - BINDERSNAP_API_ORIGIN=https://api.bindersnap.com
+      - BINDERSNAP_SITE_ORIGIN=https://bindersnap.com
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:?set in the generated env file}
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:?set in the generated env file}
       - STRIPE_PRICE_ID=${STRIPE_PRICE_ID:?set in the generated env file}
