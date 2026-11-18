@@ -7,6 +7,7 @@ import {
   type GiteaClient,
 } from "./client";
 import { latestReviewByUser } from "../change-assignments";
+import { readTreeBlobs } from "./conflicts";
 
 type PullRequest = components["schemas"]["PullRequest"];
 type PullReview = components["schemas"]["PullReview"];
@@ -1053,29 +1054,50 @@ export async function listBranchUpdates(
 }
 
 /**
- * Everybody who wrote into a change's branch, by login: whoever made one of
- * the commits it has that the base branch does not.
+ * Everybody who wrote into a change's branch: whoever made one of the commits
+ * it has that the base branch does not.
  *
- * **Merges are left out.** Bring up to date writes a merge commit as
- * whoever pressed it, which any writer in the binder may, and it adds
- * nothing the change proposes. Every other commit on the branch is words
- * somebody wrote into it, and nobody approves what they wrote — even after
- * they have been taken off the change's co-editors.
+ * **It fails closed**, because a writer missed is a writer who could approve
+ * their own words:
+ *
+ * - A commit's author and its committer both count, by login.
+ * - A commit Gitea ties to no account is counted by its email instead, and
+ *   the approver is matched against their own emails ({@link isChangeWriter}).
+ *   One with neither a login nor an email is a writer nobody can name, and
+ *   nobody may approve the change ({@link ChangeWriters.unnamed}).
+ * - **A merge counts unless it adds nothing.** Bring up to date writes one as
+ *   whoever pressed it, which any writer in the binder may, and a merge that
+ *   only brings in the base's files proposes nothing. But a merge commit can
+ *   carry any contents, so one is passed over only when every file in it is
+ *   exactly as one of its two parents had it; otherwise whoever made it wrote
+ *   into the change.
  */
+export interface ChangeWriters {
+  /** Logins, lower-cased. */
+  logins: Set<string>;
+  /** Emails of commits Gitea ties to no account, lower-cased. */
+  emails: Set<string>;
+  /** A commit with neither a login nor an email. */
+  unnamed: boolean;
+}
+
 export async function listChangeWriters(params: {
   client: GiteaClient;
   owner: string;
   repo: string;
   branch: string;
   base: string;
-}): Promise<Set<string>> {
+}): Promise<ChangeWriters> {
   const { client, owner, repo, branch, base } = params;
-  const writers = new Set<string>();
+  const writers: ChangeWriters = {
+    logins: new Set(),
+    emails: new Set(),
+    unnamed: false,
+  };
   const limit = 50;
   const pages = 40;
   // A long review gathers many saves; read them all, to a sane bound — and
-  // past it, refuse rather than answer from part of the history, because a
-  // writer missed is a writer who could approve their own words.
+  // past it, refuse rather than answer from part of the history.
   for (let page = 1; page <= pages; page += 1) {
     const commits = await unwrap(
       client.GET("/repos/{owner}/{repo}/commits", {
@@ -1094,15 +1116,93 @@ export async function listChangeWriters(params: {
       }),
     );
     for (const commit of commits) {
-      if ((commit.parents?.length ?? 0) > 1) continue;
-      const login = commit.author?.login ?? commit.committer?.login;
-      if (login) writers.add(login);
+      const parents = (commit.parents ?? []).map((parent) => parent.sha ?? "");
+      if (
+        parents.length > 1 &&
+        (await mergeAddsNothing({
+          client,
+          owner,
+          repo,
+          sha: commit.sha ?? "",
+          parents,
+        }))
+      ) {
+        continue;
+      }
+      addCommitWriters(writers, commit);
     }
     if (commits.length < limit) return writers;
   }
   throw new Error(
     `This change has more than ${limit * pages} saves, too many to tell who wrote it.`,
   );
+}
+
+type ListedCommit = components["schemas"]["Commit"];
+
+/** One commit's author and committer, by login, else by email. */
+export function addCommitWriters(
+  writers: ChangeWriters,
+  commit: Pick<ListedCommit, "author" | "committer" | "commit">,
+): void {
+  const people = [
+    { login: commit.author?.login, email: commit.commit?.author?.email },
+    { login: commit.committer?.login, email: commit.commit?.committer?.email },
+  ];
+  for (const { login, email } of people) {
+    if (login) writers.logins.add(login.toLowerCase());
+    else if (email) writers.emails.add(email.toLowerCase());
+    else writers.unnamed = true;
+  }
+}
+
+/** Whether a person, by login and their emails, wrote into the change. */
+export function isChangeWriter(
+  writers: ChangeWriters,
+  login: string,
+  emails: readonly string[],
+): boolean {
+  if (writers.logins.has(login.toLowerCase())) return true;
+  return emails.some((email) => writers.emails.has(email.toLowerCase()));
+}
+
+/**
+ * Whether a merge commit holds nothing but what its parents held: every
+ * path is exactly as one parent or the other has it. Two parents only — an
+ * octopus merge is nothing Bindersnap makes, and counts.
+ */
+export function treeAddsNothing(
+  merge: ReadonlyMap<string, string>,
+  first: ReadonlyMap<string, string>,
+  second: ReadonlyMap<string, string>,
+): boolean {
+  const paths = new Set([...merge.keys(), ...first.keys(), ...second.keys()]);
+  for (const path of paths) {
+    const here = merge.get(path);
+    if (here !== first.get(path) && here !== second.get(path)) return false;
+  }
+  return true;
+}
+
+async function mergeAddsNothing(params: {
+  client: GiteaClient;
+  owner: string;
+  repo: string;
+  sha: string;
+  parents: string[];
+}): Promise<boolean> {
+  const { client, owner, repo, sha, parents } = params;
+  if (parents.length !== 2 || !sha || parents.some((parent) => !parent)) {
+    return false;
+  }
+  const read = (at: string) =>
+    readTreeBlobs({ client, org: owner, workspace: repo, sha: at });
+  const [merge, first, second] = await Promise.all([
+    read(sha),
+    read(parents[0]!),
+    read(parents[1]!),
+  ]);
+  return treeAddsNothing(merge, first, second);
 }
 
 /**

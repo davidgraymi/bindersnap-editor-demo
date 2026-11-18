@@ -1034,19 +1034,49 @@ test("listPullRequestsWithoutReviews reads the changes and none of their reviews
   expect(reviewReads).toEqual([1]);
 });
 
-test("listChangeWriters names who committed to a change, merges aside, every page", async () => {
+const TREES: Record<string, Array<{ path: string; sha: string }>> = {
+  // `main` brought in: one file from each side.
+  "clean-merge": [
+    { path: "a.json", sha: "1" },
+    { path: "b.json", sha: "2" },
+  ],
+  "branch-side": [{ path: "a.json", sha: "1" }],
+  "main-side": [{ path: "b.json", sha: "2" }],
+  // The same merge, with words in it neither side had.
+  "evil-merge": [
+    { path: "a.json", sha: "9" },
+    { path: "b.json", sha: "2" },
+  ],
+};
+
+function treeHandler(init: unknown) {
+  const sha = (init as { params: { path: { sha: string } } }).params.path.sha;
+  return {
+    tree: (TREES[sha] ?? []).map((entry) => ({ ...entry, type: "blob" })),
+    truncated: false,
+  };
+}
+
+const single = (login: string) => ({
+  author: { login },
+  committer: { login },
+  parents: [{ sha: "p" }],
+});
+
+test("listChangeWriters names who committed to a change, clean merges aside, every page", async () => {
   const { listChangeWriters } = await import("./pullRequests");
-  const single = (login: string) => ({
-    author: { login },
-    parents: [{ sha: "p" }],
-  });
   const pages: Record<number, unknown[]> = {
     1: [
       ...Array.from({ length: 49 }, () => single("alice")),
       // Bring up to date, pressed by somebody who wrote nothing.
-      { author: { login: "carol" }, parents: [{ sha: "a" }, { sha: "b" }] },
+      {
+        sha: "clean-merge",
+        author: { login: "carol" },
+        committer: { login: "carol" },
+        parents: [{ sha: "branch-side" }, { sha: "main-side" }],
+      },
     ],
-    2: [single("grace")],
+    2: [single("Grace")],
   };
   const { client } = createMockClient({
     GET: {
@@ -1055,6 +1085,7 @@ test("listChangeWriters names who committed to a change, merges aside, every pag
           .query;
         return pages[query.page] ?? [];
       },
+      "/repos/{owner}/{repo}/git/trees/{sha}": treeHandler,
     },
   });
 
@@ -1065,15 +1096,83 @@ test("listChangeWriters names who committed to a change, merges aside, every pag
     branch: "draft/alice/1",
     base: "main",
   });
-  expect([...writers].sort()).toEqual(["alice", "grace"]);
+  expect([...writers.logins].sort()).toEqual(["alice", "grace"]);
+  expect(writers.unnamed).toBe(false);
+});
+
+test("listChangeWriters counts a merge that carries words of its own", async () => {
+  const { listChangeWriters } = await import("./pullRequests");
+  const { client } = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/commits": () => [
+        single("alice"),
+        {
+          sha: "evil-merge",
+          author: { login: "carol" },
+          committer: { login: "carol" },
+          parents: [{ sha: "branch-side" }, { sha: "main-side" }],
+        },
+      ],
+      "/repos/{owner}/{repo}/git/trees/{sha}": treeHandler,
+    },
+  });
+  const writers = await listChangeWriters({
+    client,
+    owner: "acme",
+    repo: "clinical",
+    branch: "draft/alice/1",
+    base: "main",
+  });
+  expect([...writers.logins].sort()).toEqual(["alice", "carol"]);
+});
+
+test("a commit with no account is a writer by email, and with neither nobody can approve", async () => {
+  const { addCommitWriters, isChangeWriter } = await import("./pullRequests");
+  const writers = {
+    logins: new Set<string>(),
+    emails: new Set<string>(),
+    unnamed: false,
+  };
+  addCommitWriters(writers, {
+    author: { login: "alice" },
+    // Committed under an address Gitea ties to nobody.
+    committer: undefined,
+    commit: { committer: { email: "Dan@Example.org" } },
+  } as never);
+  expect(isChangeWriter(writers, "ALICE", [])).toBe(true);
+  expect(isChangeWriter(writers, "dan", ["dan@example.org"])).toBe(true);
+  expect(isChangeWriter(writers, "bob", ["bob@example.org"])).toBe(false);
+  expect(writers.unnamed).toBe(false);
+
+  addCommitWriters(writers, { commit: {} } as never);
+  expect(writers.unnamed).toBe(true);
+});
+
+test("a merge adds nothing only when every file is as one parent had it", async () => {
+  const { treeAddsNothing } = await import("./pullRequests");
+  const map = (entries: Record<string, string>) =>
+    new Map(Object.entries(entries));
+  const first = map({ "a.json": "1", "gone.json": "7" });
+  const second = map({ "b.json": "2" });
+  // `main` deleted gone.json; the merge follows it.
+  expect(
+    treeAddsNothing(map({ "a.json": "1", "b.json": "2" }), first, second),
+  ).toBe(true);
+  expect(
+    treeAddsNothing(map({ "a.json": "3", "b.json": "2" }), first, second),
+  ).toBe(false);
+  expect(
+    treeAddsNothing(
+      map({ "a.json": "1", "b.json": "2", "new.json": "4" }),
+      first,
+      second,
+    ),
+  ).toBe(false);
 });
 
 test("listChangeWriters refuses to answer from part of a change's history", async () => {
   const { listChangeWriters } = await import("./pullRequests");
-  const full = Array.from({ length: 50 }, () => ({
-    author: { login: "alice" },
-    parents: [{ sha: "p" }],
-  }));
+  const full = Array.from({ length: 50 }, () => single("alice"));
   const { client } = createMockClient({
     GET: { "/repos/{owner}/{repo}/commits": () => full },
   });
