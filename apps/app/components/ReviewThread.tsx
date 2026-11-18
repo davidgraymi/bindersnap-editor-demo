@@ -18,6 +18,7 @@ import {
   REACTION_DISPLAY,
 } from "../reactions";
 import { PersonAvatar } from "./PersonAvatar";
+import { MentionText, MentionTextarea } from "./MentionTextarea";
 
 interface ReviewThreadProps {
   thread: DiscussionThread;
@@ -175,7 +176,9 @@ export function ReviewThread({
         </blockquote>
       ) : null}
 
-      <p className="rev-thread-body">{root.body}</p>
+      <p className="rev-thread-body">
+        <MentionText text={root.body} />
+      </p>
 
       {hidden ? null : (
         <>
@@ -197,7 +200,9 @@ export function ReviewThread({
                   {formatEventDate(comment.createdAt)}
                 </time>
               </div>
-              <p className="rev-thread-body">{comment.body}</p>
+              <p className="rev-thread-body">
+                <MentionText text={comment.body} />
+              </p>
               <ReactionRow
                 comment={comment}
                 canAct={canAct}
@@ -220,13 +225,13 @@ export function ReviewThread({
 
           {replying && canAct ? (
             <div className="rev-composer rev-composer--reply">
-              <textarea
+              <MentionTextarea
                 className="rev-composer-input"
                 rows={2}
                 autoFocus
                 placeholder="Reply to this thread…"
                 value={replyBody}
-                onChange={(event) => setReplyBody(event.target.value)}
+                onValueChange={setReplyBody}
               />
               <div className="rev-composer-actions">
                 <button

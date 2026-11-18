@@ -17,6 +17,7 @@ import { followInApp, navigateToHref } from "../appLink";
 import { anchorFrom, clampQuote, locateAnchor } from "../textAnchor";
 import { AppIcon } from "./AppIcon";
 import { PersonAvatar } from "./PersonAvatar";
+import { MentionText, MentionTextarea } from "./MentionTextarea";
 
 /**
  * Commenting on the words, where they are read.
@@ -377,7 +378,7 @@ export function PassageComments({
           <blockquote className="passage-quote">
             {clampQuote(draft.anchor.quote)}
           </blockquote>
-          <textarea
+          <MentionTextarea
             className="bs-input"
             aria-label="Your comment"
             placeholder="What about it?"
@@ -385,7 +386,7 @@ export function PassageComments({
             value={body}
             autoFocus
             disabled={busy}
-            onChange={(event) => setBody(event.target.value)}
+            onValueChange={setBody}
             onKeyDown={(event) => {
               if (event.key === "Escape") cancel();
               if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
@@ -474,7 +475,7 @@ export function PassageComments({
                         <strong>
                           {first.author.fullName.trim() || first.author.login}
                         </strong>{" "}
-                        {first.body}
+                        <MentionText text={first.body} />
                       </p>
                     </div>
                   ) : null}

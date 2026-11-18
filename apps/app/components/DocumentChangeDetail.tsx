@@ -24,6 +24,7 @@ import type { DocumentChangeView } from "../routes";
 import { ChangeReviewers } from "./ChangeReviewers";
 import { nameFor, usePeopleNames } from "../usePeopleNames";
 import { ReviewTimeline } from "./ReviewTimeline";
+import { MentionText, MentionTextarea } from "./MentionTextarea";
 
 interface DocumentChangeDetailProps {
   /**
@@ -579,15 +580,13 @@ export function DocumentChangeDetail({
                 Why
                 <span className="bs-field-optional">optional</span>
               </label>
-              <textarea
+              <MentionTextarea
                 id="change-body"
                 className="bs-input"
                 rows={5}
                 value={editing.body}
                 disabled={savingSubject}
-                onChange={(event) =>
-                  setEditing({ ...editing, body: event.target.value })
-                }
+                onValueChange={(body) => setEditing({ ...editing, body })}
               />
             </div>
             <div className="bs-field-row">
@@ -634,7 +633,9 @@ export function DocumentChangeDetail({
                 </p>
               )}
               {description ? (
-                <p className="rev-description">{description}</p>
+                <p className="rev-description">
+                  <MentionText text={description} />
+                </p>
               ) : null}
             </div>
             {canEditSubject ? (
@@ -790,16 +791,16 @@ export function DocumentChangeDetail({
               </div>
             ) : actionState.showChangesForm ? (
               <div className="rev-decision-confirm">
-                <textarea
+                <MentionTextarea
                   className="bs-input"
                   placeholder="Describe what needs to change…"
                   value={actionState.changesComment}
                   rows={3}
                   autoFocus
                   disabled={isSubmitting}
-                  onChange={(event) =>
+                  onValueChange={(changesComment) =>
                     updateActionState({
-                      changesComment: event.target.value,
+                      changesComment,
                       error: null,
                     })
                   }
