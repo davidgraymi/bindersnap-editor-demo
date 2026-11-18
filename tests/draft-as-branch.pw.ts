@@ -16,6 +16,9 @@ import { expect, test, type Page } from "@playwright/test";
 import {
   API_BASE_URL,
   APP_BASE_URL,
+  GITEA_BOB_PASS,
+  GITEA_BOB_USER,
+  GITEA_URL,
   OWNER,
   signInAsAlice,
   signInAsBob,
@@ -186,10 +189,48 @@ test("somebody else's draft is not read, whichever way its branch is spelt", asy
   await signInAsBob(bob);
   await discardOwnDrafts(bob);
   const branch = await draftWithARule(bob);
+  // A second act, so the draft has a commit that is not its newest.
+  const again = await bob.request.put(`${API}/rules/sign-off`, {
+    headers: HEADERS,
+    data: {
+      draft: branch,
+      rule: {
+        scope: "folder",
+        target: "clinical-standards",
+        teams: ["quality-committee"],
+        users: [],
+      },
+    },
+  });
+  expect(again.ok(), await again.text()).toBeTruthy();
+  const commits = (await (
+    await fetch(
+      `${GITEA_URL}/api/v1/repos/${OWNER}/governance/commits?sha=${encodeURIComponent(branch)}&limit=2`,
+      {
+        headers: {
+          Authorization: `Basic ${Buffer.from(
+            `${GITEA_BOB_USER}:${GITEA_BOB_PASS}`,
+          ).toString("base64")}`,
+        },
+      },
+    )
+  ).json()) as Array<{ sha: string }>;
+  const [newest, earlier] = commits.map((commit) => commit.sha);
+  expect(earlier, "the draft has two commits").toBeTruthy();
 
   const alice = await browser.newPage();
   await signInAsAlice(alice);
-  for (const ref of [branch, `refs/heads/${branch}`, `${branch}~0`]) {
+  for (const ref of [
+    branch,
+    `refs/heads/${branch}`,
+    `heads/${branch}`,
+    `remotes/origin/${branch}`,
+    `${branch}~0`,
+    newest!,
+    // Not only its newest: any commit in it is a copy of its words.
+    earlier!,
+    earlier!.slice(0, 10),
+  ]) {
     const read = await alice.request.get(
       `${API}/rules/sign-off?ref=${encodeURIComponent(ref)}`,
       { headers: HEADERS },

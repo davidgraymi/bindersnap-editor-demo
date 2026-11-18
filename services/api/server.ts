@@ -213,7 +213,7 @@ import {
   findCurrentDraft,
   startDraft,
   isDraftBranch,
-  normalizeReadableRef,
+  vetReadableRef,
   listBinderDrafts,
   openDraft,
   readDraftActs,
@@ -13630,53 +13630,20 @@ async function resolveReadableRef(params: {
 }): Promise<{ ref: string } | { error: string } | null> {
   const raw = (params.refRaw ?? "").trim();
   if (raw === "") return null;
-  // Compared under the name Gitea reads it by: `refs/heads/draft/bob/1` is
-  // `draft/bob/1`, and must meet the same check.
-  const asked = normalizeReadableRef(raw);
-  if (asked === null) {
-    return { error: "That is not a branch or a version of this binder." };
-  }
-
-  const unproposed = isDraftBranch(asked)
-    ? await listBinderDrafts({
-        client: params.client,
-        org: params.org,
-        workspace: params.workspace,
-      })
-    : [];
-  // A bare commit id is a way to the same files: refused when it is the
-  // newest commit of somebody else's draft.
-  const looksLikeCommit = /^[0-9a-f]{7,64}$/i.test(asked);
-  const othersHead =
-    looksLikeCommit && unproposed.length === 0
-      ? await listBinderDrafts({
-          client: params.client,
-          org: params.org,
-          workspace: params.workspace,
-        })
-      : unproposed;
-  if (
-    looksLikeCommit &&
-    othersHead.some(
-      (entry) =>
-        entry.owner !== params.username &&
-        entry.changeNumber === null &&
-        (entry.head ?? "").toLowerCase().startsWith(asked.toLowerCase()),
-    )
-  ) {
-    return {
-      error:
-        "That draft is not yours. Other people's drafts are visible as existing and never as contents.",
-    };
-  }
-  const stillADraft = unproposed.find((entry) => entry.branch === asked);
-  if (stillADraft && stillADraft.owner !== params.username) {
-    return {
-      error:
-        "That draft is not yours. Other people's drafts are visible as existing and never as contents.",
-    };
-  }
-  return { ref: asked };
+  const verdict = await vetReadableRef({
+    client: params.client,
+    org: params.org,
+    workspace: params.workspace,
+    username: params.username,
+    ref: raw,
+  });
+  if ("ref" in verdict) return verdict;
+  return {
+    error:
+      verdict.refused === "not-yours"
+        ? "That draft is not yours. Other people's drafts are visible as existing and never as contents."
+        : "That is not a branch or a version of this binder.",
+  };
 }
 
 /**

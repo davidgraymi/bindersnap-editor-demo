@@ -1,4 +1,4 @@
-import { expect, mock, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
 
 import type { GiteaClient } from "./client";
 import {
@@ -9,10 +9,14 @@ import {
   listBinderDrafts,
   normalizeReadableRef,
   openDraft,
+  vetReadableRef,
   readDraftActs,
 } from "./drafts";
 
 type Handler = (init?: any) => unknown;
+
+/** A handler's answer for "Gitea has no such thing": a 404. */
+const NOT_FOUND = Symbol("not found");
 
 function createMockClient(handlers: {
   GET?: Record<string, Handler>;
@@ -28,8 +32,10 @@ function createMockClient(handlers: {
     mock(async (path: string, init?: unknown) => {
       const handler = handlers[verb]?.[path];
       if (!handler) return notFound();
+      const data = await handler(init);
+      if (data === NOT_FOUND) return notFound();
       return {
-        data: await handler(init),
+        data,
         error: undefined,
         response: new Response(null, { status: 200 }),
       };
@@ -336,6 +342,11 @@ test("a ref is checked under the name Gitea reads it by", () => {
   // Nothing else under refs/ is a place a reader is offered.
   expect(normalizeReadableRef("refs/pull/3/head")).toBeNull();
   expect(normalizeReadableRef("refs/heads/")).toBeNull();
+  // Git's short spellings of the same namespaces: `heads/x` is
+  // `refs/heads/x` before it is a branch called `heads/x`.
+  expect(normalizeReadableRef("heads/draft/bob/20261111")).toBeNull();
+  expect(normalizeReadableRef("tags/01J8XZ/v4")).toBeNull();
+  expect(normalizeReadableRef("remotes/origin/draft/bob/1")).toBeNull();
   // Revision syntax reaches a commit by a name the check never sees.
   for (const sneaky of [
     "draft/bob/20261111~0",
@@ -350,4 +361,76 @@ test("a ref is checked under the name Gitea reads it by", () => {
   }
   // A version tag's name, with a slash, is still fine.
   expect(normalizeReadableRef("01J8XZ4K7M/v4")).toBe("01J8XZ4K7M/v4");
+});
+
+describe("vetReadableRef", () => {
+  const BOBS = "draft/bob/20261111000000000";
+  const ONLY_ON_BOBS = "a".repeat(40);
+  const BOBS_HEAD = "b".repeat(40);
+  const ON_MAIN = "c".repeat(40);
+
+  const binder = () =>
+    createMockClient({
+      GET: {
+        "/repos/{owner}/{repo}/branches": () => [
+          { name: "main", commit: { id: ON_MAIN } },
+          { name: BOBS, commit: { id: BOBS_HEAD } },
+        ],
+        "/repos/{owner}/{repo}/pulls": () => [],
+        "/repos/{owner}/{repo}/branches/{branch}": (init: any) =>
+          [BOBS, "main"].includes(init.params.path.branch)
+            ? { name: init.params.path.branch }
+            : NOT_FOUND,
+        "/repos/{owner}/{repo}/tags/{tag}": (init: any) =>
+          init.params.path.tag === "01J8XZ/v4"
+            ? { name: "01J8XZ/v4" }
+            : NOT_FOUND,
+        "/repos/{owner}/{repo}/compare/{basehead}": () => ({
+          commits: [{ sha: BOBS_HEAD }, { sha: ONLY_ON_BOBS }],
+        }),
+      },
+    });
+  const vet = (ref: string, username = "alice") =>
+    vetReadableRef({
+      client: binder().client,
+      org: "acme",
+      workspace: "policies",
+      username,
+      ref,
+    });
+
+  test("a branch or a tag that exists is read", async () => {
+    expect(await vet("main")).toEqual({ ref: "main" });
+    expect(await vet("refs/tags/01J8XZ/v4")).toEqual({
+      ref: "refs/tags/01J8XZ/v4",
+    });
+    expect(await vet("01J8XZ/v4")).toEqual({ ref: "01J8XZ/v4" });
+    expect(await vet(ON_MAIN)).toEqual({ ref: ON_MAIN });
+  });
+
+  test("somebody else's draft is refused, by name and by any commit in it", async () => {
+    expect(await vet(BOBS)).toEqual({ refused: "not-yours" });
+    expect(await vet(`refs/heads/${BOBS}`)).toEqual({ refused: "not-yours" });
+    expect(await vet(BOBS_HEAD)).toEqual({ refused: "not-yours" });
+    // Not its newest: an earlier commit of the same draft.
+    expect(await vet(ONLY_ON_BOBS)).toEqual({ refused: "not-yours" });
+    expect(await vet(ONLY_ON_BOBS.toUpperCase())).toEqual({
+      refused: "not-yours",
+    });
+  });
+
+  test("your own draft is yours to read", async () => {
+    expect(await vet(BOBS, "bob")).toEqual({ ref: BOBS });
+    expect(await vet(ONLY_ON_BOBS, "bob")).toEqual({ ref: ONLY_ON_BOBS });
+  });
+
+  test("anything that is not there is not a ref", async () => {
+    expect(await vet("draft/bob/1")).toEqual({ refused: "not-a-ref" });
+    expect(await vet("aaaaaaaaaa")).toEqual({ refused: "not-a-ref" });
+    expect(await vet(`heads/${BOBS}`)).toEqual({ refused: "not-a-ref" });
+    expect(await vet(`remotes/origin/${BOBS}`)).toEqual({
+      refused: "not-a-ref",
+    });
+    expect(await vet("refs/tags/nope")).toEqual({ refused: "not-a-ref" });
+  });
 });

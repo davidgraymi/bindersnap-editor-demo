@@ -44,6 +44,7 @@ import {
   readAllPages,
   unwrap,
   GiteaApiError,
+  toGiteaApiError,
   type GiteaClient,
 } from "./client";
 import { createUploadBranch } from "./uploads";
@@ -128,7 +129,10 @@ export function buildDraftBranchName(
  * else's unproposed draft is one prefix away. `refs/heads/` is taken off;
  * `refs/tags/` (a version) is kept; any other `refs/` — a pull request's
  * head, a remote's — names nothing a reader of a binder is offered, and is
- * refused rather than guessed at.
+ * refused rather than guessed at. So are git's short spellings of the same
+ * namespaces (`heads/…`, `tags/…`, `remotes/…`): git reads `heads/draft/bob/1`
+ * as `refs/heads/draft/bob/1` before it would look for a branch of that name,
+ * so a name that starts with one is never compared as it stands.
  */
 export function normalizeReadableRef(ref: string): string | null {
   const asked = ref.trim();
@@ -143,7 +147,142 @@ export function normalizeReadableRef(ref: string): string | null {
   }
   if (asked.startsWith("refs/tags/")) return asked;
   if (asked.startsWith("refs/")) return null;
+  if (/^(heads|tags|remotes)\//.test(asked)) return null;
   return asked;
+}
+
+/** A full commit id: SHA-1 or SHA-256. A short one is refused. */
+const FULL_COMMIT_ID = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i;
+
+export type ReadableRefVerdict =
+  { ref: string } | { refused: "not-a-ref" | "not-yours" };
+
+/**
+ * Whether a reader may read a binder at the ref they asked for.
+ *
+ * **An allowlist, not a list of what is refused.** Git reaches the same
+ * commit by many spellings, and Gitea resolves a ref it does not recognise
+ * by falling back rather than failing; every spelling the check did not
+ * foresee was a way into somebody else's draft. So a ref is read only when
+ * it is one of three things:
+ *
+ * - **a branch that exists**, under its own name — refused when it is
+ *   somebody else's unproposed draft;
+ * - **a tag that exists** (a version), as `refs/tags/…` or by its name;
+ * - **a full commit id** — refused when it is a commit only somebody else's
+ *   unproposed draft holds, not just that draft's newest: every commit in a
+ *   draft is a copy of its words. A commit the draft shares with `main` is
+ *   the record's, and anybody may read it.
+ *
+ * Anything else — a short commit id, a name that is not there — is not a
+ * branch or a version of this binder.
+ */
+export async function vetReadableRef(params: {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  username: string;
+  ref: string;
+}): Promise<ReadableRefVerdict> {
+  const { client, org, workspace, username } = params;
+  const asked = normalizeReadableRef(params.ref);
+  if (asked === null) return { refused: "not-a-ref" };
+
+  const othersUnproposed = async () =>
+    (await listBinderDrafts({ client, org, workspace })).filter(
+      (draft) => draft.owner !== username,
+    );
+
+  if (FULL_COMMIT_ID.test(asked)) {
+    const sha = asked.toLowerCase();
+    for (const draft of await othersUnproposed()) {
+      if ((draft.head ?? "").toLowerCase() === sha) {
+        return { refused: "not-yours" };
+      }
+      if (await commitOnlyOnBranch({ client, org, workspace, sha, draft })) {
+        return { refused: "not-yours" };
+      }
+    }
+    return { ref: asked };
+  }
+
+  if (asked.startsWith("refs/tags/")) {
+    return (await tagExists(client, org, workspace, asked.slice(10)))
+      ? { ref: asked }
+      : { refused: "not-a-ref" };
+  }
+
+  if (await branchExistsByName(client, org, workspace, asked)) {
+    if (
+      isDraftBranch(asked) &&
+      (await othersUnproposed()).some((draft) => draft.branch === asked)
+    ) {
+      return { refused: "not-yours" };
+    }
+    return { ref: asked };
+  }
+  if (await tagExists(client, org, workspace, asked)) return { ref: asked };
+  return { refused: "not-a-ref" };
+}
+
+/** Whether this commit is one of the commits a draft holds beyond `main`. */
+async function commitOnlyOnBranch(params: {
+  client: GiteaClient;
+  org: string;
+  workspace: string;
+  sha: string;
+  draft: BinderDraft;
+}): Promise<boolean> {
+  const { client, org, workspace, sha, draft } = params;
+  const { data, error, response } = await client.GET(
+    "/repos/{owner}/{repo}/compare/{basehead}",
+    {
+      params: {
+        path: {
+          owner: org,
+          repo: workspace,
+          basehead: `main...${draft.branch}`,
+        },
+      },
+    },
+  );
+  // A draft deleted since the list was read holds nothing.
+  if (response.status === 404) return false;
+  if (!response.ok) throw toGiteaApiError(response.status, error);
+  return (data?.commits ?? []).some(
+    (commit) => (commit.sha ?? "").toLowerCase() === sha,
+  );
+}
+
+async function branchExistsByName(
+  client: GiteaClient,
+  org: string,
+  workspace: string,
+  branch: string,
+): Promise<boolean> {
+  const { error, response } = await client.GET(
+    "/repos/{owner}/{repo}/branches/{branch}",
+    { params: { path: { owner: org, repo: workspace, branch } } },
+  );
+  if (response.status === 404) return false;
+  if (!response.ok) throw toGiteaApiError(response.status, error);
+  return true;
+}
+
+async function tagExists(
+  client: GiteaClient,
+  org: string,
+  workspace: string,
+  tag: string,
+): Promise<boolean> {
+  if (tag === "") return false;
+  const { error, response } = await client.GET(
+    "/repos/{owner}/{repo}/tags/{tag}",
+    { params: { path: { owner: org, repo: workspace, tag } } },
+  );
+  if (response.status === 404) return false;
+  if (!response.ok) throw toGiteaApiError(response.status, error);
+  return true;
 }
 
 export function isDraftBranch(branch: string): boolean {
