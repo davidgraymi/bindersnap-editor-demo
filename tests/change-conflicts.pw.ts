@@ -326,3 +326,82 @@ test("the conflicts read names each side and refuses stale heads", async () => {
   );
   expect(stale.status).toBe(409);
 });
+
+test("bringing somebody's change up to date does not make you one of its writers", async () => {
+  const session = await signUp(buildCredentials());
+  const org = (
+    (await (
+      await fetch(`${API_BASE_URL}/api/app/organizations`, {
+        method: "POST",
+        headers: authHeaders(session),
+        body: JSON.stringify({
+          acceptedTerms: LEGAL_VERSION,
+          name: `Update ${randomUUID().slice(0, 6)}`,
+        }),
+      })
+    ).json()) as { organization: { name: string } }
+  ).organization.name;
+  const binder = (
+    (await (
+      await fetch(`${API_BASE_URL}/api/app/orgs/${org}/binders`, {
+        method: "POST",
+        headers: authHeaders(session),
+        body: JSON.stringify({
+          name: "Clinical Policies",
+          approvers: { groups: ["everyone", "Owners"] },
+        }),
+      })
+    ).json()) as { workspace: { name: string } }
+  ).workspace.name;
+  // An owner too, so they may bring the change up to date.
+  const approver = buildCredentials();
+  const approverSession = await signUp(approver);
+  const joined = await fetch(`${API_BASE_URL}/api/app/orgs/${org}/people`, {
+    method: "POST",
+    headers: authHeaders(session),
+    body: JSON.stringify({ username: approver.username, owner: true }),
+  });
+  expect(joined.status, await joined.text()).toBeLessThan(300);
+
+  const changes = `${API_BASE_URL}/api/app/binders/${org}/${binder}/changes`;
+  const documents = `${API_BASE_URL}/api/app/binders/${org}/${binder}/documents`;
+  const revisions = `${API_BASE_URL}/api/app/binders/${org}/${binder}/document-revisions`;
+  for (const name of ["Hand Hygiene", "Sharps Disposal"]) {
+    const added = await upload(session, documents, { name }, policy(name));
+    await publish(session, approverSession, org, binder, added);
+  }
+  // Ours rewords one policy; another change publishes the other, so ours
+  // is behind with nothing to choose between.
+  const ours = await upload(
+    session,
+    revisions,
+    { documentPath: "hand-hygiene" },
+    policy("Wash your hands with soap."),
+  );
+  const theirs = await upload(
+    session,
+    revisions,
+    { documentPath: "sharps-disposal" },
+    policy("Use the yellow bin."),
+  );
+  await publish(session, approverSession, org, binder, theirs);
+
+  let updated: Response | null = null;
+  await expect(async () => {
+    updated = await fetch(`${changes}/${ours}/update`, {
+      method: "POST",
+      headers: authHeaders(approverSession),
+      body: "{}",
+    });
+    expect(updated.status, await updated.clone().text()).toBe(200);
+  }).toPass({ timeout: 60_000 });
+
+  // The merge they made brings in only what was published: they did not
+  // write the change, and their approval is taken.
+  const review = await fetch(`${changes}/${ours}/reviews`, {
+    method: "POST",
+    headers: authHeaders(approverSession),
+    body: JSON.stringify({ event: "APPROVE" }),
+  });
+  expect(review.status, await review.text()).toBe(200);
+});

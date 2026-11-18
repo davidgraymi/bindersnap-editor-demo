@@ -1034,27 +1034,75 @@ test("listPullRequestsWithoutReviews reads the changes and none of their reviews
   expect(reviewReads).toEqual([1]);
 });
 
-test("listChangeWriters names who committed to a change, merges aside, every page", async () => {
+const TREES: Record<string, Array<{ path: string; sha: string }>> = {
+  // `main` brought in: one file from each side.
+  "clean-merge": [
+    { path: "a.json", sha: "1" },
+    { path: "b.json", sha: "2" },
+  ],
+  "branch-side": [{ path: "a.json", sha: "1" }],
+  "main-side": [{ path: "b.json", sha: "2" }],
+  // The same merge, with words in it neither side had.
+  "evil-merge": [
+    { path: "a.json", sha: "9" },
+    { path: "b.json", sha: "2" },
+  ],
+};
+
+function treeHandler(init: unknown) {
+  const sha = (init as { params: { path: { sha: string } } }).params.path.sha;
+  return {
+    tree: (TREES[sha] ?? []).map((entry) => ({ ...entry, type: "blob" })),
+    truncated: false,
+  };
+}
+
+/**
+ * What each side of the merge changed since they parted: the branch wrote
+ * a.json, `main` published b.json.
+ */
+function sideCommits(query: { sha: string; page: number }) {
+  const files: Record<string, string[]> = {
+    "branch-side": ["a.json"],
+    "main-side": ["b.json"],
+  };
+  const changed = files[query.sha];
+  if (!changed) return undefined;
+  return query.page === 1
+    ? [{ files: changed.map((filename) => ({ filename })) }]
+    : [];
+}
+
+const single = (login: string) => ({
+  author: { login },
+  committer: { login },
+  parents: [{ sha: "p" }],
+});
+
+test("listChangeWriters names who committed to a change, clean merges aside, every page", async () => {
   const { listChangeWriters } = await import("./pullRequests");
-  const single = (login: string) => ({
-    author: { login },
-    parents: [{ sha: "p" }],
-  });
   const pages: Record<number, unknown[]> = {
     1: [
       ...Array.from({ length: 49 }, () => single("alice")),
       // Bring up to date, pressed by somebody who wrote nothing.
-      { author: { login: "carol" }, parents: [{ sha: "a" }, { sha: "b" }] },
+      {
+        sha: "clean-merge",
+        author: { login: "carol" },
+        committer: { login: "carol" },
+        parents: [{ sha: "branch-side" }, { sha: "main-side" }],
+      },
     ],
-    2: [single("grace")],
+    2: [single("Grace")],
   };
   const { client } = createMockClient({
     GET: {
       "/repos/{owner}/{repo}/commits": (init) => {
-        const query = (init as { params: { query: { page: number } } }).params
-          .query;
-        return pages[query.page] ?? [];
+        const query = (
+          init as { params: { query: { sha: string; page: number } } }
+        ).params.query;
+        return sideCommits(query) ?? pages[query.page] ?? [];
       },
+      "/repos/{owner}/{repo}/git/trees/{sha}": treeHandler,
     },
   });
 
@@ -1065,15 +1113,96 @@ test("listChangeWriters names who committed to a change, merges aside, every pag
     branch: "draft/alice/1",
     base: "main",
   });
-  expect([...writers].sort()).toEqual(["alice", "grace"]);
+  expect([...writers.logins].sort()).toEqual(["alice", "grace"]);
+  expect(writers.unnamed).toBe(false);
+});
+
+test("listChangeWriters counts a merge that carries words of its own", async () => {
+  const { listChangeWriters } = await import("./pullRequests");
+  const { client } = createMockClient({
+    GET: {
+      "/repos/{owner}/{repo}/commits": (init) =>
+        sideCommits(
+          (init as { params: { query: { sha: string; page: number } } }).params
+            .query,
+        ) ?? [
+          single("alice"),
+          {
+            sha: "evil-merge",
+            author: { login: "carol" },
+            committer: { login: "carol" },
+            parents: [{ sha: "branch-side" }, { sha: "main-side" }],
+          },
+        ],
+      "/repos/{owner}/{repo}/git/trees/{sha}": treeHandler,
+    },
+  });
+  const writers = await listChangeWriters({
+    client,
+    owner: "acme",
+    repo: "clinical",
+    branch: "draft/alice/1",
+    base: "main",
+  });
+  expect([...writers.logins].sort()).toEqual(["alice", "carol"]);
+});
+
+test("a commit Gitea ties to no account names nobody, whatever its email", async () => {
+  const { addCommitWriters, isChangeWriter } = await import("./pullRequests");
+  const writers = { logins: new Set<string>(), unnamed: false };
+  addCommitWriters(writers, {
+    author: { login: "Alice" },
+    committer: { login: "alice" },
+  } as never);
+  expect(isChangeWriter(writers, "ALICE")).toBe(true);
+  expect(writers.unnamed).toBe(false);
+
+  // Committed under an address Gitea ties to nobody: not trusted.
+  addCommitWriters(writers, {
+    author: { login: "alice" },
+    committer: undefined,
+    commit: { committer: { email: "dan@example.org" } },
+  } as never);
+  expect(writers.unnamed).toBe(true);
+});
+
+test("a merge is clean only when each file is what a merge without choices gives", async () => {
+  const { isCleanMerge } = await import("./pullRequests");
+  const map = (entries: Record<string, string>) =>
+    new Map(Object.entries(entries));
+  const first = map({ "a.json": "branch", "c.json": "old", "gone.json": "7" });
+  const second = map({ "a.json": "base", "c.json": "new" });
+  const firstChanged = new Set(["a.json"]);
+  // `main` published c.json and archived gone.json.
+  const secondChanged = new Set(["c.json", "gone.json"]);
+  const clean = (merge: Record<string, string>, both = false) =>
+    isCleanMerge({
+      merge: map(merge),
+      first,
+      second,
+      firstChanged: both ? new Set([...firstChanged, "c.json"]) : firstChanged,
+      secondChanged,
+    });
+
+  expect(clean({ "a.json": "branch", "c.json": "new" })).toBe(true);
+  // Words neither side had.
+  expect(clean({ "a.json": "edited", "c.json": "new" })).toBe(false);
+  // Keeping the branch's old copy of what `main` published brings old
+  // words back: a choice, not a merge.
+  expect(clean({ "a.json": "branch", "c.json": "old" })).toBe(false);
+  // Dropping the branch's own words for the base's is a choice too.
+  expect(clean({ "a.json": "base", "c.json": "new" })).toBe(false);
+  // A file nobody had.
+  expect(clean({ "a.json": "branch", "c.json": "new", "new.json": "4" })).toBe(
+    false,
+  );
+  // Both sides changed c.json: whatever the merge holds was chosen.
+  expect(clean({ "a.json": "branch", "c.json": "new" }, true)).toBe(false);
 });
 
 test("listChangeWriters refuses to answer from part of a change's history", async () => {
   const { listChangeWriters } = await import("./pullRequests");
-  const full = Array.from({ length: 50 }, () => ({
-    author: { login: "alice" },
-    parents: [{ sha: "p" }],
-  }));
+  const full = Array.from({ length: 50 }, () => single("alice"));
   const { client } = createMockClient({
     GET: { "/repos/{owner}/{repo}/commits": () => full },
   });

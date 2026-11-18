@@ -95,7 +95,8 @@ export async function readTreeBlobs(params: {
 
   // Gitea pages a large recursive tree. A binder is dozens of files, so this
   // is one page in practice — but a silently truncated tree would miss a
-  // conflict, so it reads until Gitea says it is done.
+  // conflict, or a writer, so it reads until Gitea says it is done, and a
+  // tree it cannot finish is an error rather than part of an answer.
   for (let page = 1; page <= 50; page += 1) {
     const tree = (await unwrap(
       client.GET("/repos/{owner}/{repo}/git/trees/{sha}", {
@@ -111,10 +112,12 @@ export async function readTreeBlobs(params: {
         blobs.set(entry.path, entry.sha);
       }
     }
-    if (!tree.truncated) break;
+    if (!tree.truncated) return blobs;
   }
 
-  return blobs;
+  throw new Error(
+    "This binder holds too many files to read its tree in one go.",
+  );
 }
 
 /** The identity a path carries, or the path itself when it carries none. */

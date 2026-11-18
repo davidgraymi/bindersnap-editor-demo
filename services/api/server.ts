@@ -384,6 +384,7 @@ import {
   readMergeCommitSha,
   listBranchUpdates,
   listChangeWriters,
+  isChangeWriter,
   listPullRequests,
   findClosedChanges,
   listPullRequestsWithReviews,
@@ -8695,7 +8696,19 @@ async function handleWorkspaceChangeReview(
           branch: head,
           base,
         });
-        if (writers.has(auth.session.username)) {
+        // A commit Gitea ties to no account: nobody may sign off a change
+        // when its writers cannot all be told apart from its approvers.
+        if (writers.unnamed) {
+          return json(
+            403,
+            {
+              error:
+                "Part of this change was saved by somebody Bindersnap cannot name, so nobody can approve it. Ask its author to save it again from Bindersnap.",
+            },
+            baseHeaders,
+          );
+        }
+        if (isChangeWriter(writers, auth.session.username)) {
           return json(
             403,
             {

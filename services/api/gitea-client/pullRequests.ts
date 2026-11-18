@@ -7,6 +7,7 @@ import {
   type GiteaClient,
 } from "./client";
 import { latestReviewByUser } from "../change-assignments";
+import { readTreeBlobs } from "./conflicts";
 
 type PullRequest = components["schemas"]["PullRequest"];
 type PullReview = components["schemas"]["PullReview"];
@@ -1053,29 +1054,48 @@ export async function listBranchUpdates(
 }
 
 /**
- * Everybody who wrote into a change's branch, by login: whoever made one of
- * the commits it has that the base branch does not.
+ * Everybody who wrote into a change's branch: whoever made one of the commits
+ * it has that the base branch does not.
  *
- * **Merges are left out.** Bring up to date writes a merge commit as
- * whoever pressed it, which any writer in the binder may, and it adds
- * nothing the change proposes. Every other commit on the branch is words
- * somebody wrote into it, and nobody approves what they wrote — even after
- * they have been taken off the change's co-editors.
+ * **It fails closed**, because a writer missed is a writer who could approve
+ * their own words:
+ *
+ * - A commit's author and its committer both count, by login.
+ * - **A commit Gitea ties to no account names nobody**, and nobody may
+ *   approve the change ({@link ChangeWriters.unnamed}). Its email is not
+ *   trusted instead: anybody pushing with git chooses the address, and one
+ *   that belongs to nobody would leave its pusher free to approve.
+ * - **A merge counts unless it is a clean one.** Bring up to date writes one
+ *   as whoever pressed it, which any writer in the binder may, and a merge
+ *   that only brings in the base's files proposes nothing. But a merge commit
+ *   can carry any contents, so one is passed over only when each file is what
+ *   a merge without choices would give ({@link isCleanMerge}); otherwise
+ *   whoever made it wrote into the change.
+ *
+ * Commit metadata says who a commit claims to be by. A writer with git access
+ * could still claim to be somebody else; only a record of who pushed would
+ * close that, and Gitea's API keeps none per commit.
  */
+export interface ChangeWriters {
+  /** Logins, lower-cased. */
+  logins: Set<string>;
+  /** A commit whose author or committer Gitea ties to no account. */
+  unnamed: boolean;
+}
+
 export async function listChangeWriters(params: {
   client: GiteaClient;
   owner: string;
   repo: string;
   branch: string;
   base: string;
-}): Promise<Set<string>> {
+}): Promise<ChangeWriters> {
   const { client, owner, repo, branch, base } = params;
-  const writers = new Set<string>();
+  const writers: ChangeWriters = { logins: new Set(), unnamed: false };
   const limit = 50;
   const pages = 40;
   // A long review gathers many saves; read them all, to a sane bound — and
-  // past it, refuse rather than answer from part of the history, because a
-  // writer missed is a writer who could approve their own words.
+  // past it, refuse rather than answer from part of the history.
   for (let page = 1; page <= pages; page += 1) {
     const commits = await unwrap(
       client.GET("/repos/{owner}/{repo}/commits", {
@@ -1094,15 +1114,155 @@ export async function listChangeWriters(params: {
       }),
     );
     for (const commit of commits) {
-      if ((commit.parents?.length ?? 0) > 1) continue;
-      const login = commit.author?.login ?? commit.committer?.login;
-      if (login) writers.add(login);
+      const parents = (commit.parents ?? []).map((parent) => parent.sha ?? "");
+      if (
+        parents.length > 1 &&
+        (await mergeAddsNothing({
+          client,
+          owner,
+          repo,
+          sha: commit.sha ?? "",
+          parents,
+        }))
+      ) {
+        continue;
+      }
+      addCommitWriters(writers, commit);
     }
     if (commits.length < limit) return writers;
   }
   throw new Error(
     `This change has more than ${limit * pages} saves, too many to tell who wrote it.`,
   );
+}
+
+type ListedCommit = components["schemas"]["Commit"];
+
+/** One commit's author and committer, by login; either missing names nobody. */
+export function addCommitWriters(
+  writers: ChangeWriters,
+  commit: Pick<ListedCommit, "author" | "committer">,
+): void {
+  for (const login of [commit.author?.login, commit.committer?.login]) {
+    if (login) writers.logins.add(login.toLowerCase());
+    else writers.unnamed = true;
+  }
+}
+
+/** Whether a person wrote into the change, by login. */
+export function isChangeWriter(writers: ChangeWriters, login: string): boolean {
+  return writers.logins.has(login.toLowerCase());
+}
+
+/**
+ * Whether a merge commit is what a merge without choices gives, file by file.
+ *
+ * Three-way, against what each side changed since they parted: a file both
+ * parents hold alike is held alike; a file only the branch changed is the
+ * branch's; a file only the base changed is the base's. Anything else — a
+ * file both sides changed, or one that differs without either side having
+ * changed it — is a choice somebody made, and the merge counts. The update
+ * step of resolving conflicts passes: the published versions are committed
+ * to the branch first, so both parents hold those files alike.
+ */
+export function isCleanMerge(params: {
+  merge: ReadonlyMap<string, string>;
+  first: ReadonlyMap<string, string>;
+  second: ReadonlyMap<string, string>;
+  /** Paths the first parent's side changed since the two parted. */
+  firstChanged: ReadonlySet<string>;
+  /** Paths the second parent's side changed since the two parted. */
+  secondChanged: ReadonlySet<string>;
+}): boolean {
+  const { merge, first, second, firstChanged, secondChanged } = params;
+  const paths = new Set([...merge.keys(), ...first.keys(), ...second.keys()]);
+  for (const path of paths) {
+    const here = merge.get(path);
+    const mine = first.get(path);
+    const theirs = second.get(path);
+    if (mine === theirs) {
+      if (here !== mine) return false;
+      continue;
+    }
+    const byFirst = firstChanged.has(path);
+    const bySecond = secondChanged.has(path);
+    if (byFirst && !bySecond) {
+      if (here !== mine) return false;
+    } else if (bySecond && !byFirst) {
+      if (here !== theirs) return false;
+    } else {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Every path the commits on `sha` but not on `not` touched, or null when
+ * there are too many to read — which counts the merge, rather than answer
+ * from part of the history.
+ */
+async function pathsChangedSince(params: {
+  client: GiteaClient;
+  owner: string;
+  repo: string;
+  sha: string;
+  not: string;
+}): Promise<Set<string> | null> {
+  const { client, owner, repo, sha, not } = params;
+  const paths = new Set<string>();
+  const limit = 50;
+  for (let page = 1; page <= 20; page += 1) {
+    const commits = await unwrap(
+      client.GET("/repos/{owner}/{repo}/commits", {
+        params: {
+          path: { owner, repo },
+          query: {
+            sha,
+            not,
+            page,
+            limit,
+            stat: false,
+            verification: false,
+            files: true,
+          },
+        },
+      }),
+    );
+    for (const commit of commits) {
+      for (const file of commit.files ?? []) {
+        if (file.filename) paths.add(file.filename);
+      }
+    }
+    if (commits.length < limit) return paths;
+  }
+  return null;
+}
+
+async function mergeAddsNothing(params: {
+  client: GiteaClient;
+  owner: string;
+  repo: string;
+  sha: string;
+  parents: string[];
+}): Promise<boolean> {
+  const { client, owner, repo, sha, parents } = params;
+  // Two parents only — an octopus merge is nothing Bindersnap makes.
+  const [firstSha, secondSha] = parents;
+  if (parents.length !== 2 || !sha || !firstSha || !secondSha) return false;
+  const read = (at: string) =>
+    readTreeBlobs({ client, org: owner, workspace: repo, sha: at });
+  const [merge, first, second, firstChanged, secondChanged] = await Promise.all(
+    [
+      read(sha),
+      read(firstSha),
+      read(secondSha),
+      pathsChangedSince({ client, owner, repo, sha: firstSha, not: secondSha }),
+      pathsChangedSince({ client, owner, repo, sha: secondSha, not: firstSha }),
+    ],
+  );
+  if (!firstChanged || !secondChanged) return false;
+  return isCleanMerge({ merge, first, second, firstChanged, secondChanged });
 }
 
 /**
