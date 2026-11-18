@@ -8696,7 +8696,7 @@ async function handleWorkspaceChangeReview(
           branch: head,
           base,
         });
-        // A commit nobody can be named for: nobody may sign off a change
+        // A commit Gitea ties to no account: nobody may sign off a change
         // when its writers cannot all be told apart from its approvers.
         if (writers.unnamed) {
           return json(
@@ -8708,15 +8708,7 @@ async function handleWorkspaceChangeReview(
             baseHeaders,
           );
         }
-        // A commit Gitea ties to no account is matched by email, against the
-        // approver's own — asked for only when there is one to match.
-        const emails =
-          writers.emails.size === 0
-            ? []
-            : ((await unwrap(client.GET("/user/emails"))) ?? []).flatMap(
-                (entry) => (entry.email ? [entry.email] : []),
-              );
-        if (isChangeWriter(writers, auth.session.username, emails)) {
+        if (isChangeWriter(writers, auth.session.username)) {
           return json(
             403,
             {

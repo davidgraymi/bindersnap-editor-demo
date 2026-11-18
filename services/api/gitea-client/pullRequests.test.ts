@@ -1057,6 +1057,22 @@ function treeHandler(init: unknown) {
   };
 }
 
+/**
+ * What each side of the merge changed since they parted: the branch wrote
+ * a.json, `main` published b.json.
+ */
+function sideCommits(query: { sha: string; page: number }) {
+  const files: Record<string, string[]> = {
+    "branch-side": ["a.json"],
+    "main-side": ["b.json"],
+  };
+  const changed = files[query.sha];
+  if (!changed) return undefined;
+  return query.page === 1
+    ? [{ files: changed.map((filename) => ({ filename })) }]
+    : [];
+}
+
 const single = (login: string) => ({
   author: { login },
   committer: { login },
@@ -1081,9 +1097,10 @@ test("listChangeWriters names who committed to a change, clean merges aside, eve
   const { client } = createMockClient({
     GET: {
       "/repos/{owner}/{repo}/commits": (init) => {
-        const query = (init as { params: { query: { page: number } } }).params
-          .query;
-        return pages[query.page] ?? [];
+        const query = (
+          init as { params: { query: { sha: string; page: number } } }
+        ).params.query;
+        return sideCommits(query) ?? pages[query.page] ?? [];
       },
       "/repos/{owner}/{repo}/git/trees/{sha}": treeHandler,
     },
@@ -1104,15 +1121,19 @@ test("listChangeWriters counts a merge that carries words of its own", async () 
   const { listChangeWriters } = await import("./pullRequests");
   const { client } = createMockClient({
     GET: {
-      "/repos/{owner}/{repo}/commits": () => [
-        single("alice"),
-        {
-          sha: "evil-merge",
-          author: { login: "carol" },
-          committer: { login: "carol" },
-          parents: [{ sha: "branch-side" }, { sha: "main-side" }],
-        },
-      ],
+      "/repos/{owner}/{repo}/commits": (init) =>
+        sideCommits(
+          (init as { params: { query: { sha: string; page: number } } }).params
+            .query,
+        ) ?? [
+          single("alice"),
+          {
+            sha: "evil-merge",
+            author: { login: "carol" },
+            committer: { login: "carol" },
+            parents: [{ sha: "branch-side" }, { sha: "main-side" }],
+          },
+        ],
       "/repos/{owner}/{repo}/git/trees/{sha}": treeHandler,
     },
   });
@@ -1126,48 +1147,57 @@ test("listChangeWriters counts a merge that carries words of its own", async () 
   expect([...writers.logins].sort()).toEqual(["alice", "carol"]);
 });
 
-test("a commit with no account is a writer by email, and with neither nobody can approve", async () => {
+test("a commit Gitea ties to no account names nobody, whatever its email", async () => {
   const { addCommitWriters, isChangeWriter } = await import("./pullRequests");
-  const writers = {
-    logins: new Set<string>(),
-    emails: new Set<string>(),
-    unnamed: false,
-  };
+  const writers = { logins: new Set<string>(), unnamed: false };
   addCommitWriters(writers, {
-    author: { login: "alice" },
-    // Committed under an address Gitea ties to nobody.
-    committer: undefined,
-    commit: { committer: { email: "Dan@Example.org" } },
+    author: { login: "Alice" },
+    committer: { login: "alice" },
   } as never);
-  expect(isChangeWriter(writers, "ALICE", [])).toBe(true);
-  expect(isChangeWriter(writers, "dan", ["dan@example.org"])).toBe(true);
-  expect(isChangeWriter(writers, "bob", ["bob@example.org"])).toBe(false);
+  expect(isChangeWriter(writers, "ALICE")).toBe(true);
   expect(writers.unnamed).toBe(false);
 
-  addCommitWriters(writers, { commit: {} } as never);
+  // Committed under an address Gitea ties to nobody: not trusted.
+  addCommitWriters(writers, {
+    author: { login: "alice" },
+    committer: undefined,
+    commit: { committer: { email: "dan@example.org" } },
+  } as never);
   expect(writers.unnamed).toBe(true);
 });
 
-test("a merge adds nothing only when every file is as one parent had it", async () => {
-  const { treeAddsNothing } = await import("./pullRequests");
+test("a merge is clean only when each file is what a merge without choices gives", async () => {
+  const { isCleanMerge } = await import("./pullRequests");
   const map = (entries: Record<string, string>) =>
     new Map(Object.entries(entries));
-  const first = map({ "a.json": "1", "gone.json": "7" });
-  const second = map({ "b.json": "2" });
-  // `main` deleted gone.json; the merge follows it.
-  expect(
-    treeAddsNothing(map({ "a.json": "1", "b.json": "2" }), first, second),
-  ).toBe(true);
-  expect(
-    treeAddsNothing(map({ "a.json": "3", "b.json": "2" }), first, second),
-  ).toBe(false);
-  expect(
-    treeAddsNothing(
-      map({ "a.json": "1", "b.json": "2", "new.json": "4" }),
+  const first = map({ "a.json": "branch", "c.json": "old", "gone.json": "7" });
+  const second = map({ "a.json": "base", "c.json": "new" });
+  const firstChanged = new Set(["a.json"]);
+  // `main` published c.json and archived gone.json.
+  const secondChanged = new Set(["c.json", "gone.json"]);
+  const clean = (merge: Record<string, string>, both = false) =>
+    isCleanMerge({
+      merge: map(merge),
       first,
       second,
-    ),
-  ).toBe(false);
+      firstChanged: both ? new Set([...firstChanged, "c.json"]) : firstChanged,
+      secondChanged,
+    });
+
+  expect(clean({ "a.json": "branch", "c.json": "new" })).toBe(true);
+  // Words neither side had.
+  expect(clean({ "a.json": "edited", "c.json": "new" })).toBe(false);
+  // Keeping the branch's old copy of what `main` published brings old
+  // words back: a choice, not a merge.
+  expect(clean({ "a.json": "branch", "c.json": "old" })).toBe(false);
+  // Dropping the branch's own words for the base's is a choice too.
+  expect(clean({ "a.json": "base", "c.json": "new" })).toBe(false);
+  // A file nobody had.
+  expect(clean({ "a.json": "branch", "c.json": "new", "new.json": "4" })).toBe(
+    false,
+  );
+  // Both sides changed c.json: whatever the merge holds was chosen.
+  expect(clean({ "a.json": "branch", "c.json": "new" }, true)).toBe(false);
 });
 
 test("listChangeWriters refuses to answer from part of a change's history", async () => {
