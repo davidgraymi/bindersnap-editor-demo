@@ -193,9 +193,10 @@ export function MentionTextarea({
         }}
         value={value}
         disabled={disabled}
-        role="combobox"
+        // Still a textbox, as every other text box is: a combobox is one
+        // line, and the role would rename the field for screen readers.
+        // These three point at the list while it is open.
         aria-autocomplete="list"
-        aria-expanded={open}
         aria-controls={open ? listId : undefined}
         aria-activedescendant={activeId}
         onChange={(event) => {
