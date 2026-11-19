@@ -2637,6 +2637,22 @@ input {
   min-width: 0;
 }
 
+/* The suggestions under an `@` in a text box (`MentionTextarea`). The
+   highlighted one is the one Enter picks; focus stays in the text box. */
+.mention-option[aria-selected="true"] {
+  background: var(--bs-surface-2);
+}
+
+/* An `@username` in words somebody wrote (`MentionText`). */
+.bs-mention {
+  padding: 0 var(--brand-space-0-5);
+  border-radius: var(--brand-radius-sm);
+  background: var(--bs-coral-dim);
+  color: var(--bs-coral-text);
+  font-weight: var(--brand-weight-medium);
+  white-space: nowrap;
+}
+
 .rev-picker-name {
   font-size: var(--brand-text-sm);
   font-weight: var(--brand-weight-medium);

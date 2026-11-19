@@ -18,6 +18,7 @@ import { buildReviewTimeline } from "../changeReview";
 import { nameFor, usePeopleNames } from "../usePeopleNames";
 import type { ChangeRecord } from "../documentDisplay";
 import { ReviewThread } from "./ReviewThread";
+import { MentionTextarea } from "./MentionTextarea";
 import { SkeletonGroup, SkeletonLine, SkeletonShape } from "./Skeleton";
 
 interface ReviewTimelineProps {
@@ -321,13 +322,13 @@ export function ReviewTimeline({
             </span>
             {composing ? (
               <div className="rev-composer">
-                <textarea
+                <MentionTextarea
                   className="rev-composer-input"
                   rows={3}
                   autoFocus
                   placeholder="Raise a concern about this version…"
                   value={newThreadBody}
-                  onChange={(event) => setNewThreadBody(event.target.value)}
+                  onValueChange={setNewThreadBody}
                 />
                 <div className="rev-composer-actions">
                   <button

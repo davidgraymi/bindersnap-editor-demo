@@ -237,6 +237,7 @@ export const HELP_GUIDES: HelpGuide[] = [
         heading: "Discussions",
         paragraphs: [
           "A comment starts a discussion that others can reply to. When the question is settled, resolve it. Resolving never deletes anything: who raised a concern, who answered and who closed it all stay on the change. A binder can be set so that nothing is published while a discussion is still open.",
+          "To bring someone in, type @ and the start of their name in a comment, a reply, a request for changes or a change's description. Pick them from the list with the arrow keys and Enter. Their name is marked in what you wrote, and if they can read the binder they get a notification.",
         ],
       },
       {

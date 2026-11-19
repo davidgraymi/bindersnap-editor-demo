@@ -5,6 +5,7 @@ import { useState } from "react";
 import { proposeBinderDraft, updateChangeAssignments } from "../api";
 import type { DraftAct } from "../../../packages/api-schema/schemas/workspaces";
 import { ReviewerChooser } from "./ReviewerChooser";
+import { MentionTextarea } from "./MentionTextarea";
 
 /**
  * Writing up a draft, which is the moment it becomes a change request.
@@ -180,13 +181,13 @@ export function ProposeChangePage({
               Why
               <span className="bs-field-optional">optional</span>
             </label>
-            <textarea
+            <MentionTextarea
               id="propose-description"
               className="bs-input propose-description"
               value={description}
               rows={8}
-              onChange={(event) => {
-                setDescription(event.target.value);
+              onValueChange={(next) => {
+                setDescription(next);
                 setError(null);
               }}
               disabled={submitting}
