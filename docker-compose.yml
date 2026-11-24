@@ -34,7 +34,7 @@ services:
     # cannot, so every developer, CI run and the production host boot the same
     # bytes. Docker uses the digest and treats the tag as a label for humans.
     # To upgrade, change both here and in production in one commit.
-    image: gitea/gitea:28.2.0@sha256:30777c91280d973fa02be48b1ade735bd6859e8f6f7af3b4444d519437852504
+    image: gitea/gitea:28.4.0@sha256:aa90e8f00b755b0d665214ab9c14447ea44d3190dbe6b6d0cb46cd9c4f55d309
     container_name: ${STACK_NAME:-bindersnap}-gitea
     restart: unless-stopped
     depends_on:
